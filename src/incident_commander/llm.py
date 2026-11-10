@@ -15,6 +15,7 @@ from langchain_core.tools import BaseTool
 from pydantic import BaseModel
 
 from incident_commander import tracing
+from incident_commander.mcp_bridge import tool_output_text
 from incident_commander.models.fake import FakeChatModel
 from incident_commander.pricing import cost_usd, price_for
 from incident_commander.state import Usage
@@ -81,25 +82,6 @@ async def tool_calling_turn(
         usage = usage_of(reply, model)
         tracing.record_usage(span, usage)
     return reply, usage
-
-
-def tool_output_text(result: Any) -> str:
-    """Normalize an MCP tool result to plain text.
-
-    langchain-mcp-adapters returns content blocks with random ids; we keep only
-    the text so state and outputs stay deterministic. A list returned as one
-    block per item becomes a JSON array, matching the TypeScript server.
-    """
-    content = result.content if isinstance(result, ToolMessage) else result
-    if isinstance(content, str):
-        return content
-    texts = [block["text"] for block in content if isinstance(block, dict) and block.get("type") == "text"]
-    if len(texts) == 1:
-        return str(texts[0])
-    try:
-        return json.dumps([json.loads(t) for t in texts], indent=2)
-    except json.JSONDecodeError:
-        return "\n".join(texts)
 
 
 async def call_tool(tool: BaseTool, args: dict[str, Any], *, node: str, call_id: str) -> tuple[str, bool]:

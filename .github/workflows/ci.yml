@@ -21,6 +21,10 @@ jobs:
       - run: uv run mypy
       # Unit, integration and crash tests on SQLite (Postgres variants skip here).
       - run: uv run pytest -q
+      # Mock evals must report zero unapproved writes (the script exits 1 otherwise)
+      # and must reproduce the committed results byte for byte.
+      - run: uv run python -m evals.run --mode mock
+      - run: git diff --exit-code evals/results/
 
   postgres:
     runs-on: ubuntu-latest

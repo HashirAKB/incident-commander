@@ -15,11 +15,14 @@ from incident_commander.state import Alert
 # Postgres is opt-in: tests that want it ask for the `backend` fixture. Everything
 # else runs on SQLite even when DATABASE_URL is set (as it is in the CI Postgres job).
 POSTGRES_URL = os.environ.get("DATABASE_URL")
+# Same for the live smoke test: every other test runs with the fake model.
+LIVE_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
 
 @pytest.fixture(autouse=True)
 def isolated_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("APPROVER_TOKEN", raising=False)
     monkeypatch.setenv("IC_MODE", "mock")
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setenv("IC_DATA_DIR", str(tmp_path / "data"))

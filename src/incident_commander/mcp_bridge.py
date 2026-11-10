@@ -8,12 +8,15 @@ the Node server.
 
 from __future__ import annotations
 
+import json
 import shutil
 import sys
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
 from pathlib import Path
+from typing import Any
 
+from langchain_core.messages import ToolMessage
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_mcp_adapters.sessions import Connection, StdioConnection
 from langchain_mcp_adapters.tools import load_mcp_tools
@@ -78,3 +81,22 @@ async def open_toolbox(settings: Settings) -> AsyncIterator[Toolbox]:
             session = await stack.enter_async_context(client.session(server_name))
             tools += await load_mcp_tools(session, server_name=server_name)
         yield split_tools(tools)
+
+
+def tool_output_text(result: Any) -> str:
+    """Normalize an MCP tool result to plain text.
+
+    langchain-mcp-adapters returns content blocks with random ids; we keep only
+    the text so state and outputs stay deterministic. A list returned as one
+    block per item becomes a JSON array, matching the TypeScript server.
+    """
+    content = result.content if isinstance(result, ToolMessage) else result
+    if isinstance(content, str):
+        return content
+    texts = [block["text"] for block in content if isinstance(block, dict) and block.get("type") == "text"]
+    if len(texts) == 1:
+        return str(texts[0])
+    try:
+        return json.dumps([json.loads(t) for t in texts], indent=2)
+    except json.JSONDecodeError:
+        return "\n".join(texts)

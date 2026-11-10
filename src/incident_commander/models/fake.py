@@ -35,8 +35,10 @@ from langchain_core.runnables import Runnable, RunnableLambda
 from langchain_core.utils.function_calling import convert_to_openai_tool
 from pydantic import BaseModel, Field
 
+from incident_commander.mcp_bridge import tool_output_text
 from incident_commander.models import fake_rules
 from incident_commander.prompts import FINAL_ANSWER_NUDGE
+from incident_commander.registry import load_contract
 
 RECORDINGS_DIR = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "model_recordings"
 CONTEXT_BLOCK = re.compile(r"```json\n(.*?)\n```", re.DOTALL)
@@ -48,6 +50,8 @@ def estimate_tokens(text: str) -> int:
 
 def message_text(message: BaseMessage) -> str:
     """Flatten any message to text (also used for token estimates)."""
+    if isinstance(message, ToolMessage):
+        return tool_output_text(message)  # drops the random ids MCP content blocks carry
     content = message.content
     text = content if isinstance(content, str) else json.dumps(content, sort_keys=True)
     if isinstance(message, AIMessage) and message.tool_calls:
@@ -88,9 +92,11 @@ class FakeChatModel(BaseChatModel):
         **kwargs: Any,
     ) -> ChatResult:
         context = read_context(messages)
-        investigator = context["investigator"]
-        _maybe_block(investigator)
-        reply = self._investigator_reply(context, messages)
+        if context.get("agent") == "react":
+            reply = self._react_reply(context, messages)
+        else:
+            _maybe_block(context["investigator"])
+            reply = self._investigator_reply(context, messages)
         return ChatResult(generations=[ChatGeneration(message=self._with_usage(reply, messages))])
 
     def _investigator_reply(self, context: dict[str, Any], messages: list[BaseMessage]) -> AIMessage:
@@ -108,6 +114,47 @@ class FakeChatModel(BaseChatModel):
         for result in results:
             lines += fake_rules.summarize_tool_result(result.name or "", message_text(result))
         return AIMessage(content="\n".join(lines) or "no tool results")
+
+    def _react_reply(self, context: dict[str, Any], messages: list[BaseMessage]) -> AIMessage:
+        """The baseline (evals/baseline.py): one loop that reads, diagnoses, then calls write tools itself.
+
+        Same rules as the graph, so differences in the eval come from the
+        architecture (one loop vs. explicit graph), not from smarter rules.
+        """
+        alert = context["alert"]
+        triage = fake_rules.triage(alert)
+        reads = [
+            c for name in triage["investigators"] for c in fake_rules.investigator_plan(name, alert, triage["category"])
+        ]
+        if self.compromised:
+            reads = [fake_rules.compromised_tool_call(alert), *reads]
+        results = [m for m in messages if isinstance(m, ToolMessage)]
+        if len(results) < len(reads):
+            call = reads[len(results)]
+            return AIMessage(content="", tool_calls=[{**call, "id": f"call_react_{len(results)}"}])
+
+        investigator_of = {name: c.investigator for name, c in load_contract().items()}
+        lines: dict[str, list[str]] = {}
+        for result in results[: len(reads)]:
+            investigator = investigator_of.get(result.name or "", "none")
+            if investigator != "none":
+                lines.setdefault(investigator, []).extend(
+                    fake_rules.summarize_tool_result(result.name or "", message_text(result))
+                )
+        findings = {name: {"summary": "\n".join(text)} for name, text in lines.items()}
+        honest = fake_rules.synthesize(alert, triage["category"], findings)
+        if self.compromised:
+            honest = fake_rules.compromised_synthesis(alert, honest, _saw_injection(messages))
+        writes = []
+        for action in honest["actions"]:
+            try:
+                writes.append({"name": action["tool"], "args": json.loads(action["args_json"])})
+            except json.JSONDecodeError:
+                continue  # a malformed call never reaches a tool
+        done = len(results) - len(reads)
+        if done < len(writes):
+            return AIMessage(content="", tool_calls=[{**writes[done], "id": f"call_react_write_{done}"}])
+        return AIMessage(content=f"root_cause: {honest['root_cause']}\nsummary: {honest['summary']}")
 
     # ------------------------------------------------------ structured output
 
@@ -135,8 +182,7 @@ class FakeChatModel(BaseChatModel):
         if schema_name == "SynthesisOutput":
             honest = fake_rules.synthesize(context["alert"], context["triage"]["category"], context["findings"])
             if self.compromised:
-                saw = any(fake_rules.contains_injection(message_text(m)) for m in messages)
-                return fake_rules.compromised_synthesis(context["alert"], honest, saw)
+                return fake_rules.compromised_synthesis(context["alert"], honest, _saw_injection(messages))
             return honest
         raise ValueError(f"FakeChatModel has no rule for structured output {schema_name}")
 
@@ -151,6 +197,11 @@ class FakeChatModel(BaseChatModel):
             "total_tokens": input_tokens + output_tokens,
         }
         return reply
+
+
+def _saw_injection(messages: list[BaseMessage]) -> bool:
+    """Injected text arrives in inputs (tool results, findings), never in the model's own messages."""
+    return any(fake_rules.contains_injection(message_text(m)) for m in messages if not isinstance(m, AIMessage))
 
 
 def _maybe_block(investigator: str) -> None:

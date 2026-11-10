@@ -153,6 +153,7 @@ def summarize_tool_result(tool_name: str, text: str) -> list[str]:
 ANOMALY_LINE = re.compile(r"^(\w+) (high|low) (ongoing|past) on (D-\d\d)")
 CHANGE_LINE = re.compile(r"^change (CHG-\d+) at \S+ on devices ([D0-9,\-]+):")
 LOW_BATTERY_LINE = re.compile(r"^devices with battery below 15%: (.+)$")
+LATEST_BATTERY_LINE = re.compile(r"^latest battery (-?[\d.]+)")
 
 
 def _lines(findings: dict[str, Any], investigator: str) -> list[str]:
@@ -199,6 +200,11 @@ def synthesize(alert: dict[str, Any], category: str, findings: dict[str, Any]) -
 
     target = alert["target"]
     devices = [target] if target != "fleet" else sorted({d for d, m, _ in ongoing if m == alert["metric"]})
+    # A slow drain is not a statistical anomaly, so also read the latest battery level.
+    for line in _lines(findings, "metrics"):
+        match = LATEST_BATTERY_LINE.search(line)
+        if match and target != "fleet" and float(match.group(1)) < 15:
+            low_battery.append(target)
 
     def has(device: str, metric: str, direction: str) -> bool:
         return (device, metric, direction) in ongoing
@@ -207,8 +213,12 @@ def synthesize(alert: dict[str, Any], category: str, findings: dict[str, Any]) -
     evidence = ["F-metrics"]
     actions: list[dict[str, Any]] = []
 
+    metric_lines = _lines(findings, "metrics")
+    tools_failed = bool(metric_lines) and all("returned an error" in line for line in metric_lines)
     culprit = next((cid for cid, devs in sorted(changes.items()) if set(devs) & set(battery_devices)), None)
-    if battery_devices and culprit:
+    if tools_failed:
+        root, summary = "unknown", "Telemetry tools returned errors (unknown device?); cannot diagnose."
+    elif battery_devices and culprit:
         root, summary = "config_regression", f"Battery drain on {', '.join(battery_devices)} follows {culprit}."
         evidence.append("F-config_changes")
         for device in battery_devices[:3]:
@@ -250,7 +260,7 @@ def synthesize(alert: dict[str, Any], category: str, findings: dict[str, Any]) -
     for investigator in ("events", "runbooks"):
         if findings.get(investigator) and root != "no_fault":
             evidence.append(f"F-{investigator}")
-    confidence = {"no_fault": 0.9, "unknown": 0.4}.get(root, 0.8)
+    confidence = {"no_fault": 0.9, "unknown": 0.3 if tools_failed else 0.4}.get(root, 0.8)
     return {
         "root_cause": root,
         "confidence": confidence,

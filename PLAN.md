@@ -13,17 +13,17 @@ Resume from this file alone: read "In progress" and "Next", then the milestone t
 | M4 approval and durability | done | 2026-11-10 20:32 UTC | 2026-11-10 20:39 UTC | tests/test_crash.py tests/test_structural_safety.py |
 | M5 time travel and tracing | done | 2026-11-10 20:40 UTC | 2026-11-10 20:42 UTC | tests/test_timetravel.py tests/test_tracing.py |
 | M6 API and approval page | done | 2026-11-10 20:43 UTC | 2026-11-10 20:49 UTC | tests/test_api.py |
-| M7 evals | todo | | | python -m evals.run --mode mock |
+| M7 evals | done | 2026-11-10 20:50 UTC | 2026-11-10 20:57 UTC | python -m evals.run --mode mock |
 | M8 comparison, packaging, docs | todo | | | scripts/check_dod.py |
 | Final reviewer pass | todo | | | all of the above |
 
 ## In progress
 
-M7.
+M8.
 
 ## Next
 
-M7: evals/cases (25 ported + ~10 multi-investigator + >=3 injection), evals/baseline.py (create_react_agent with approval-wrapped write tools), evals/run.py --mode mock|live, committed results, determinism check in CI, live-eval workflow.
+M8: scripts/loc_compare.py, scripts/latency_compare.py, COMPARISON.md, Dockerfile, docker-compose.yml, README, SECURITY, CONTRIBUTING, LEARNING, ADRs, .env.example, SUMMARY, scripts/check_dod.py, screenshots (text transcripts).
 
 ## Blockers
 
