@@ -12,18 +12,18 @@ Resume from this file alone: read "In progress" and "Next", then the milestone t
 | M3 graph without writes | done | 2026-11-10 20:27 UTC | 2026-11-10 20:31 UTC | ic run + tests/test_graph.py |
 | M4 approval and durability | done | 2026-11-10 20:32 UTC | 2026-11-10 20:39 UTC | tests/test_crash.py tests/test_structural_safety.py |
 | M5 time travel and tracing | done | 2026-11-10 20:40 UTC | 2026-11-10 20:42 UTC | tests/test_timetravel.py tests/test_tracing.py |
-| M6 API and approval page | todo | | | tests/test_api.py |
+| M6 API and approval page | done | 2026-11-10 20:43 UTC | 2026-11-10 20:49 UTC | tests/test_api.py |
 | M7 evals | todo | | | python -m evals.run --mode mock |
 | M8 comparison, packaging, docs | todo | | | scripts/check_dod.py |
 | Final reviewer pass | todo | | | all of the above |
 
 ## In progress
 
-M6.
+M7.
 
 ## Next
 
-M6: FastAPI app (POST /runs, GET /runs/{id}, SSE events, GET /runs/pending, POST decisions with bearer token, sweeper task), static approval page, ic serve, tests/test_api.py, crash test c.
+M7: evals/cases (25 ported + ~10 multi-investigator + >=3 injection), evals/baseline.py (create_react_agent with approval-wrapped write tools), evals/run.py --mode mock|live, committed results, determinism check in CI, live-eval workflow.
 
 ## Blockers
 

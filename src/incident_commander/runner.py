@@ -105,19 +105,30 @@ def config_for(thread_id: str) -> RunnableConfig:
 ALERT_TARGET = re.compile(r"^(D-\d{2}|fleet)$")
 
 
-def load_alert(path: Path) -> Alert:
-    """Read and check an alert file. Alerts are input, so they are validated like any input."""
-    data = json.loads(path.read_text(encoding="utf-8"))
+def parse_alert(data: Any) -> Alert:
+    """Check an alert from a file or an HTTP body. Alerts are input, validated like any input."""
+    if not isinstance(data, dict):
+        raise ValueError("alert must be a JSON object")
     for key in ("alert_id", "target", "metric", "summary", "fired_at"):
-        if not isinstance(data.get(key), str) or not data[key]:
-            raise ValueError(f"alert {path} needs a non-empty string field {key!r}")
+        if not isinstance(data.get(key), str) or not data[key] or len(data[key]) > 500:
+            raise ValueError(f"alert needs a non-empty string field {key!r} (max 500 chars)")
     if not ALERT_TARGET.match(data["target"]):
         raise ValueError(f"alert target must be a device id like D-17 or 'fleet', got {data['target']!r}")
     parse_iso(data["fired_at"])
-    alert: Alert = {k: data[k] for k in ("alert_id", "target", "metric", "summary", "fired_at")}  # type: ignore[assignment]
+    alert: Alert = {
+        "alert_id": data["alert_id"],
+        "target": data["target"],
+        "metric": data["metric"],
+        "summary": data["summary"],
+        "fired_at": data["fired_at"],
+    }
     if isinstance(data.get("site"), str):
-        alert["site"] = data["site"]
+        alert["site"] = data["site"][:100]
     return alert
+
+
+def load_alert(path: Path) -> Alert:
+    return parse_alert(json.loads(path.read_text(encoding="utf-8")))
 
 
 def default_limits(settings: Settings) -> Limits:
@@ -257,6 +268,14 @@ async def _pending_request(rt: Runtime, thread_id: str) -> dict[str, Any]:
     return status.pending_interrupt
 
 
+async def decision_command(rt: Runtime, thread_id: str, approval_id: str, answers: dict[str, Any]) -> Command[Any]:
+    """Validate an approver's answers against the pending request. Raises DecisionRefused (HTTP 409)."""
+    request = await _pending_request(rt, thread_id)
+    payload = {"approval_id": approval_id, "decided_at": to_iso(rt.clock()), "decisions": answers}
+    normalize_decisions(cast(ApprovalRequest, request), payload, write_schemas(rt.toolbox))
+    return Command(resume=payload)
+
+
 async def submit_decisions(
     rt: Runtime,
     thread_id: str,
@@ -264,23 +283,30 @@ async def submit_decisions(
     answers: dict[str, Any],
     on_event: EventSink | None = None,
 ) -> RunStatus:
-    """Validate an approver's answers and resume the run. Raises DecisionRefused (HTTP 409)."""
+    """Validate an approver's answers and resume the run until it finishes or pauses again."""
     async with _lock(thread_id):
-        request = await _pending_request(rt, thread_id)
-        payload = {"approval_id": approval_id, "decided_at": to_iso(rt.clock()), "decisions": answers}
-        normalize_decisions(cast(ApprovalRequest, request), payload, write_schemas(rt.toolbox))
-        return await drive(rt, Command(resume=payload), thread_id, on_event)
+        command = await decision_command(rt, thread_id, approval_id, answers)
+        return await drive(rt, command, thread_id, on_event)
+
+
+async def expiry_command(rt: Runtime, thread_id: str) -> Command[Any]:
+    """A resume command that expires every action. Raises DecisionRefused if not yet expired."""
+    request = await _pending_request(rt, thread_id)
+    now = rt.clock()
+    if now < parse_iso(request["expires_at"]):
+        raise DecisionRefused(f"approval {request['approval_id']} has not expired yet")
+    return Command(resume={"approval_id": request["approval_id"], "decided_at": to_iso(now), "expired": True})
 
 
 async def expire_run(rt: Runtime, thread_id: str, on_event: EventSink | None = None) -> RunStatus:
     """Resume a paused run whose approval deadline has passed, with every action expired."""
     async with _lock(thread_id):
-        request = await _pending_request(rt, thread_id)
-        now = rt.clock()
-        if now < parse_iso(request["expires_at"]):
-            raise DecisionRefused(f"approval {request['approval_id']} has not expired yet")
-        payload = {"approval_id": request["approval_id"], "decided_at": to_iso(now), "expired": True}
-        return await drive(rt, Command(resume=payload), thread_id, on_event)
+        return await drive(rt, await expiry_command(rt, thread_id), thread_id, on_event)
+
+
+def is_expired(rt: Runtime, status: RunStatus) -> bool:
+    request = status.pending_interrupt
+    return request is not None and rt.clock() >= parse_iso(request["expires_at"])
 
 
 async def list_threads(rt: Runtime) -> list[str]:
@@ -301,10 +327,8 @@ async def list_pending(rt: Runtime) -> list[RunStatus]:
 async def sweep_expired(rt: Runtime) -> list[str]:
     """Expire every paused run past its deadline. Returns the expired thread ids."""
     expired = []
-    now = rt.clock()
     for status in await list_pending(rt):
-        request = status.pending_interrupt or {}
-        if now >= parse_iso(request["expires_at"]):
+        if is_expired(rt, status):
             await expire_run(rt, status.thread_id)
             expired.append(status.thread_id)
     return expired

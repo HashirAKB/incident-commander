@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Incident approvals</title>
+<style>
+  :root { --bg: #f7f7f5; --panel: #fff; --text: #1d1d1b; --muted: #6b6b66; --line: #ddddd6;
+          --accent: #2754c5; --danger: #b3261e; --ok: #1e7b34; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --panel: #20201e; --text: #ececea; --muted: #a2a29c; --line: #3a3a36;
+            --accent: #8aa8ff; --danger: #ff8a80; --ok: #7bd88f; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 system-ui, sans-serif; background: var(--bg); color: var(--text); }
+  header { padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  header h1 { font-size: 17px; margin: 0 12px 0 0; }
+  main { display: grid; grid-template-columns: minmax(220px, 320px) 1fr; gap: 16px; padding: 16px; }
+  @media (max-width: 760px) { main { grid-template-columns: 1fr; } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-width: 0; }
+  h2 { font-size: 15px; margin: 0 0 8px; }
+  button { font: inherit; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--text); cursor: pointer; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  input, textarea { font: 13px ui-monospace, monospace; width: 100%; padding: 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); }
+  pre { white-space: pre-wrap; word-break: break-word; font: 12px ui-monospace, monospace; background: var(--bg); padding: 8px; border-radius: 6px; margin: 4px 0; }
+  .muted { color: var(--muted); }
+  .run { padding: 6px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; }
+  .run:hover, .run.selected { border-color: var(--accent); }
+  .action { border-top: 1px solid var(--line); padding: 8px 0; }
+  .badge { font-size: 12px; padding: 1px 6px; border-radius: 10px; border: 1px solid var(--line); }
+  .danger { color: var(--danger); } .ok { color: var(--ok); }
+  label { margin-right: 10px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Incident approvals</h1>
+  <span class="muted">Approver token (kept in this tab only):</span>
+  <input id="token" type="password" style="max-width: 240px" autocomplete="off">
+  <button id="refresh">Refresh</button>
+  <span id="message" class="muted"></span>
+</header>
+<main>
+  <section>
+    <h2>Waiting for approval</h2>
+    <div id="pending" class="muted">loading...</div>
+    <h2 style="margin-top: 16px">Start a run</h2>
+    <textarea id="alert" rows="6">{"alert_id": "web-1", "target": "D-33", "metric": "signal", "summary": "D-33 signal below -100 dBm", "fired_at": "2026-03-01T00:00:00Z"}</textarea>
+    <button id="start" class="primary" style="margin-top: 6px">Start</button>
+  </section>
+  <section id="detail"><p class="muted">Select a run.</p></section>
+</main>
+<script>
+"use strict";
+// All run content (tool output, findings, rationales) is untrusted: it is only
+// ever inserted with textContent, never as HTML.
+const tokenInput = document.getElementById("token");
+try { tokenInput.value = sessionStorage.getItem("approverToken") || ""; } catch (e) { /* storage blocked */ }
+tokenInput.addEventListener("input", () => {
+  try { sessionStorage.setItem("approverToken", tokenInput.value); } catch (e) { /* storage blocked */ }
+});
+
+let selected = null;
+let source = null;
+let countdown = null;
+
+function el(tag, text, className) {
+  const node = document.createElement(tag);
+  if (text !== undefined) node.textContent = text;
+  if (className) node.className = className;
+  return node;
+}
+function say(text, isError) {
+  const message = document.getElementById("message");
+  message.textContent = text;
+  message.className = isError ? "danger" : "muted";
+}
+async function api(method, path, body) {
+  const headers = { "Content-Type": "application/json" };
+  if (method !== "GET") headers.Authorization = "Bearer " + tokenInput.value;
+  const response = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(response.status + ": " + (data.detail || response.statusText));
+  return data;
+}
+
+async function loadPending() {
+  const box = document.getElementById("pending");
+  try {
+    const runs = await api("GET", "/runs/pending");
+    box.replaceChildren();
+    if (runs.length === 0) box.append(el("p", "Nothing waiting.", "muted"));
+    for (const run of runs) {
+      const item = el("div", "", "run" + (run.thread_id === selected ? " selected" : ""));
+      item.append(el("div", run.alert.summary), el("div", run.thread_id + " (mode=" + run.mode + ")", "muted"));
+      item.onclick = () => select(run.thread_id);
+      box.append(item);
+    }
+  } catch (error) { box.textContent = error.message; }
+}
+
+function renderRun(run) {
+  const detail = document.getElementById("detail");
+  detail.replaceChildren();
+  const title = el("h2", run.alert ? run.alert.summary : run.thread_id);
+  title.append(" ", el("span", "mode=" + run.mode, "badge"), " ", el("span", run.phase, "badge"));
+  detail.append(title, el("div", run.thread_id, "muted"));
+  if (run.mode === "mock") detail.append(el("p", "Mock mode: a deterministic fake model produced this diagnosis.", "muted"));
+
+  detail.append(el("h2", "Findings"));
+  for (const finding of Object.values(run.findings || {})) {
+    detail.append(el("strong", finding.finding_id + (finding.truncated ? " (truncated)" : "")));
+    if (finding.blocked_tool_calls.length) detail.append(el("div", "blocked: " + finding.blocked_tool_calls.join(", "), "danger"));
+    detail.append(el("pre", finding.summary));
+  }
+  if (run.diagnosis) {
+    detail.append(el("h2", "Diagnosis"));
+    detail.append(el("p", run.diagnosis.root_cause + " (" + run.diagnosis.confidence + "): " + run.diagnosis.summary));
+    detail.append(el("p", "evidence: " + run.diagnosis.evidence.join(", "), "muted"));
+  }
+  if (run.dropped_proposals && run.dropped_proposals.length) {
+    detail.append(el("h2", "Dropped proposals"), el("pre", run.dropped_proposals.join("\n")));
+  }
+  if (run.stop_reason) detail.append(el("p", "stop_reason: " + run.stop_reason, run.stop_reason === "completed" ? "ok" : ""));
+  if (run.approval_request) renderApproval(detail, run);
+  for (const execution of run.executions || []) {
+    detail.append(el("div", execution.action_id + " " + execution.tool + ": " + execution.status, "ok"));
+  }
+}
+
+function renderApproval(detail, run) {
+  const request = run.approval_request;
+  detail.append(el("h2", "Proposed actions"));
+  const timer = el("p", "", "danger");
+  detail.append(timer);
+  clearInterval(countdown);
+  const tick = () => {
+    const left = Math.max(0, Date.parse(request.expires_at) - Date.now());
+    timer.textContent = left > 0 ? "expires in " + Math.floor(left / 60000) + "m " + Math.floor(left / 1000) % 60 + "s"
+                                 : "expired: decisions will be refused";
+  };
+  tick();
+  countdown = setInterval(tick, 1000);
+
+  const choices = {};
+  for (const action of request.actions) {
+    const box = el("div", "", "action");
+    box.append(el("strong", action.action_id + " " + action.tool), el("pre", JSON.stringify(action.args, null, 2)));
+    box.append(el("div", "rationale: " + action.rationale, "muted"), el("div", "risk: " + action.risk, "muted"));
+    const edit = el("textarea");
+    edit.rows = 4; edit.value = JSON.stringify(action.args, null, 2); edit.style.display = "none";
+    for (const verdict of ["reject", "approve", "edit"]) {
+      const label = el("label");
+      const radio = el("input");
+      radio.type = "radio"; radio.name = action.action_id; radio.value = verdict; radio.style.width = "auto";
+      radio.checked = verdict === "reject";
+      radio.onchange = () => { edit.style.display = verdict === "edit" ? "block" : "none"; };
+      label.append(radio, " " + verdict);
+      box.append(label);
+    }
+    box.append(edit);
+    choices[action.action_id] = { action, edit };
+    detail.append(box);
+  }
+  const submit = el("button", "Submit decisions", "primary");
+  submit.onclick = async () => {
+    const decisions = {};
+    for (const [id, { action, edit }] of Object.entries(choices)) {
+      const verdict = document.querySelector("input[name='" + id + "']:checked").value;
+      decisions[id] = { verdict, args_hash: action.args_hash };
+      if (verdict === "edit") {
+        try { decisions[id].args = JSON.parse(edit.value); } catch (e) { say(id + ": edited args are not JSON", true); return; }
+      }
+    }
+    try {
+      await api("POST", "/runs/" + run.thread_id + "/decisions", { approval_id: request.approval_id, decisions });
+      say("decisions accepted");
+      select(run.thread_id);
+    } catch (error) { say(error.message, true); }
+  };
+  detail.append(submit);
+}
+
+function select(threadId) {
+  selected = threadId;
+  if (source) source.close();
+  // EventSource sends the current state first ("snapshot"), then live events.
+  source = new EventSource("/runs/" + threadId + "/events");
+  source.addEventListener("snapshot", (event) => renderRun(JSON.parse(event.data)));
+  for (const type of ["node", "approval_requested", "progress"]) {
+    source.addEventListener(type, async () => renderRun(await api("GET", "/runs/" + threadId)));
+  }
+  source.addEventListener("end", async () => { source.close(); renderRun(await api("GET", "/runs/" + threadId)); loadPending(); });
+  loadPending();
+}
+
+document.getElementById("refresh").onclick = loadPending;
+document.getElementById("start").onclick = async () => {
+  try {
+    const alert = JSON.parse(document.getElementById("alert").value);
+    const { thread_id } = await api("POST", "/runs", { alert });
+    say("started " + thread_id);
+    select(thread_id);
+  } catch (error) { say(error.message, true); }
+};
+loadPending();
+setInterval(loadPending, 10000);
+</script>
+</body>
+</html>

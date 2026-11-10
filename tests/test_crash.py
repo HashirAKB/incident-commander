@@ -1,5 +1,9 @@
 """Crash tests: kill a process with SIGKILL and finish the run from a new process.
 
+(a) kill `ic run --follow` while paused, approve with `ic approve`
+(b) kill `ic run` inside an investigator, `ic resume`, then approve
+(c) kill `ic serve` while a run is paused, approve over HTTP on a new server
+
 The `ic` CLI runs in real subprocesses. The only thing they share with each
 other and with this test is the checkpointer (SQLite file or Postgres), the
 ledger and the MCP server's write log. Parametrized over both checkpointers.
@@ -11,11 +15,16 @@ import asyncio
 import json
 import os
 import signal
+import socket
 import subprocess
 import sys
 import uuid
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
+
+import httpx
+import pytest
 
 from incident_commander.config import Settings, load_settings
 from incident_commander.runner import RunStatus, get_status, open_runtime
@@ -123,3 +132,75 @@ async def test_b_kill_mid_investigator_then_resume_from_last_checkpoint(
     ]
     assert tool_spans.count("detect_anomalies") == 2
     assert tool_spans.count("get_device_events") == 1
+
+
+def free_port() -> int:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+async def wait_for_server(base: str, proc: subprocess.Popen[str]) -> None:
+    async with httpx.AsyncClient() as client:
+        for _ in range(240):
+            if proc.poll() is not None:
+                raise AssertionError(f"server exited:\n{proc.stdout.read() if proc.stdout else ''}")
+            try:
+                if (await client.get(f"{base}/runs/pending")).status_code == 200:
+                    return
+            except httpx.TransportError:
+                pass
+            await asyncio.sleep(0.25)
+    raise AssertionError("server did not start")
+
+
+async def http_phase(base: str, thread_id: str, phase: str) -> dict[str, Any]:
+    async with httpx.AsyncClient() as client:
+        for _ in range(240):
+            response = await client.get(f"{base}/runs/{thread_id}")
+            if response.status_code == 200 and response.json()["phase"] == phase:
+                return dict(response.json())
+            await asyncio.sleep(0.25)
+    raise AssertionError(f"run never reached {phase}")
+
+
+async def test_c_kill_the_api_server_while_paused_then_approve_over_http(
+    settings: Settings, backend: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("APPROVER_TOKEN", "crash-test-token")
+    auth = {"Authorization": "Bearer crash-test-token"}
+    alert = json.loads((ALERTS_DIR / "signal_d33.json").read_text())
+
+    first_port = free_port()
+    first = start_ic("serve", "--port", str(first_port))
+    try:
+        base = f"http://127.0.0.1:{first_port}"
+        await wait_for_server(base, first)
+        async with httpx.AsyncClient() as client:
+            created = await client.post(f"{base}/runs", json={"alert": alert}, headers=auth)
+        thread_id = created.json()["thread_id"]
+        paused = await http_phase(base, thread_id, "paused")
+    finally:
+        first.send_signal(signal.SIGKILL)
+        first.wait()
+
+    second_port = free_port()
+    second = start_ic("serve", "--port", str(second_port))
+    try:
+        base = f"http://127.0.0.1:{second_port}"
+        await wait_for_server(base, second)
+        request = paused["approval_request"]
+        decisions = {a["action_id"]: {"verdict": "approve", "args_hash": a["args_hash"]} for a in request["actions"]}
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{base}/runs/{thread_id}/decisions",
+                json={"approval_id": request["approval_id"], "decisions": decisions},
+                headers=auth,
+            )
+        assert response.status_code == 202, response.text
+        await http_phase(base, thread_id, "finished")
+    finally:
+        second.terminate()
+        second.wait()
+
+    assert_completed_once(settings, await status_of(thread_id))

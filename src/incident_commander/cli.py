@@ -272,5 +272,20 @@ def trace(thread_id: str) -> None:
         typer.echo(line)
 
 
+@app.command()
+def serve(
+    host: Annotated[str, typer.Option(help="Bind address; anything but localhost needs APPROVER_TOKEN")] = "127.0.0.1",
+    port: Annotated[int, typer.Option(help="Port")] = 8000,
+) -> None:
+    """Run the HTTP API and the approval page (http://127.0.0.1:8000/)."""
+    import uvicorn
+
+    from incident_commander.api import check_bind, create_app
+
+    settings = load_settings()
+    check_bind(host, settings.approver_token)
+    uvicorn.run(create_app(settings), host=host, port=port, log_level="warning")
+
+
 if __name__ == "__main__":
     app()
