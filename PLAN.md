@@ -11,7 +11,7 @@ Resume from this file alone: read "In progress" and "Next", then the milestone t
 | M2 models and budgets | done | 2026-11-10 20:21 UTC | 2026-11-10 20:25 UTC | tests/test_models.py tests/test_budgets.py |
 | M3 graph without writes | done | 2026-11-10 20:27 UTC | 2026-11-10 20:31 UTC | ic run + tests/test_graph.py |
 | M4 approval and durability | done | 2026-11-10 20:32 UTC | 2026-11-10 20:39 UTC | tests/test_crash.py tests/test_structural_safety.py |
-| M5 time travel and tracing | todo | | | tests/test_timetravel.py tests/test_tracing.py |
+| M5 time travel and tracing | done | 2026-11-10 20:40 UTC | 2026-11-10 20:42 UTC | tests/test_timetravel.py tests/test_tracing.py |
 | M6 API and approval page | todo | | | tests/test_api.py |
 | M7 evals | todo | | | python -m evals.run --mode mock |
 | M8 comparison, packaging, docs | todo | | | scripts/check_dod.py |
@@ -19,11 +19,11 @@ Resume from this file alone: read "In progress" and "Next", then the milestone t
 
 ## In progress
 
-M5.
+M6.
 
 ## Next
 
-M5: ic history / replay / fork (time travel), ic trace, tests/test_timetravel.py, tests/test_tracing.py.
+M6: FastAPI app (POST /runs, GET /runs/{id}, SSE events, GET /runs/pending, POST decisions with bearer token, sweeper task), static approval page, ic serve, tests/test_api.py, crash test c.
 
 ## Blockers
 

@@ -130,3 +130,25 @@ def read_trace(traces_dir: Path, thread_id: str) -> list[dict[str, Any]]:
         return []
     records = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
     return sorted(records, key=lambda r: (r["start_ns"], r["end_ns"]))
+
+
+def format_timeline(records: list[dict[str, Any]]) -> list[str]:
+    """Text timeline for `ic trace`: offset from the first span, duration, name, key attributes."""
+    if not records:
+        return []
+    start = records[0]["start_ns"]
+    lines = []
+    for record in records:
+        attributes = record["attributes"]
+        offset_ms = (record["start_ns"] - start) / 1e6
+        duration_ms = (record["end_ns"] - record["start_ns"]) / 1e6
+        extras = [
+            f"{key}={attributes[key]}"
+            for key in ("tokens.input", "tokens.output", "cost_usd", "stop_reason")
+            if key in attributes
+        ]
+        if attributes.get("tool.error"):
+            extras.append("error")
+        indent = "  " if record["parent_id"] else ""
+        lines.append(f"{offset_ms:9.1f}ms {duration_ms:8.1f}ms  {indent}{record['name']}  {' '.join(extras)}".rstrip())
+    return lines

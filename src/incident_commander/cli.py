@@ -10,7 +10,7 @@ from typing import Annotated, Any, TypeVar
 
 import typer
 
-from incident_commander import runner
+from incident_commander import runner, timetravel, tracing
 from incident_commander.approvals import DecisionRefused
 from incident_commander.config import Settings, load_settings
 from incident_commander.state import Limits
@@ -214,6 +214,62 @@ def sweep_expired() -> None:
     typer.echo(f"expired {len(expired)} run(s)")
     for thread_id in expired:
         typer.echo(f"  {thread_id}")
+
+
+@app.command()
+def history(thread_id: str) -> None:
+    """List a run's checkpoints, oldest first: step, checkpoint id, next node, state summary."""
+    settings = load_settings()
+
+    async def go() -> list[timetravel.HistoryEntry]:
+        async with runner.open_runtime(settings) as rt:
+            return await timetravel.history(rt, thread_id)
+
+    for entry in run_async(go):
+        next_nodes = ",".join(entry.next_nodes) or "END"
+        typer.echo(f"step {entry.step:>3}  {entry.checkpoint_id}  next={next_nodes:<16} {entry.summary}")
+
+
+@app.command()
+def replay(thread_id: str, checkpoint: Annotated[str, typer.Option(help="Checkpoint id from ic history")]) -> None:
+    """Re-run a run from an earlier checkpoint. Writes already in the ledger are skipped."""
+    settings = load_settings()
+
+    async def go() -> runner.RunStatus:
+        async with runner.open_runtime(settings) as rt:
+            return await timetravel.replay(rt, thread_id, checkpoint, on_event=_print_event)
+
+    _print_status(run_async(go))
+
+
+@app.command()
+def fork(
+    thread_id: str,
+    checkpoint: Annotated[str, typer.Option(help="Checkpoint id from ic history")],
+    set_values: Annotated[
+        list[str], typer.Option("--set", help="key=value, dotted keys allowed, e.g. findings.metrics.summary=...")
+    ],
+) -> None:
+    """Change state at a checkpoint and continue from there on a new branch."""
+    settings = load_settings()
+
+    async def go() -> runner.RunStatus:
+        async with runner.open_runtime(settings) as rt:
+            return await timetravel.fork(rt, thread_id, checkpoint, set_values, on_event=_print_event)
+
+    _print_status(run_async(go))
+
+
+@app.command()
+def trace(thread_id: str) -> None:
+    """Print the span timeline of a run from traces/<thread_id>.jsonl."""
+    settings = load_settings()
+    lines = tracing.format_timeline(tracing.read_trace(settings.traces_dir, thread_id))
+    if not lines:
+        typer.echo(f"no trace for {thread_id} in {settings.traces_dir}", err=True)
+        raise typer.Exit(1)
+    for line in lines:
+        typer.echo(line)
 
 
 if __name__ == "__main__":

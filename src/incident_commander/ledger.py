@@ -1,4 +1,4 @@
-"""The write ledger: which (thread_id, action_id) pairs were already executed.
+"""The write ledger: which (thread_id, action_id, args_hash) were already executed.
 
 The executor checks the ledger before every write and records the result right
 after the tool returns. If the process dies after the write but before the
@@ -10,6 +10,11 @@ dies after the MCP server performed the write but before the ledger row is
 committed, the action runs again on resume. The window is one local database
 insert. Closing it would need the device API to accept an idempotency key
 (see docs/adr/0004-ledger-dedupe.md).
+
+Why args_hash in the key? After a fork (time travel), the synthesizer may
+propose a different action that reuses the id "A1". Keying on the hash too
+means only the identical action is deduplicated; a new action still runs once
+a human approves it.
 
 Storage: a SQLite file next to the checkpoints, or a table in Postgres when
 DATABASE_URL is set.
@@ -33,7 +38,7 @@ CREATE TABLE IF NOT EXISTS write_ledger (
     args_hash   TEXT NOT NULL,
     status      TEXT NOT NULL,
     result      TEXT NOT NULL,
-    PRIMARY KEY (thread_id, action_id)
+    PRIMARY KEY (thread_id, action_id, args_hash)
 )
 """
 
@@ -81,13 +86,13 @@ class Ledger:
     def _create(self, connection: Any) -> None:
         connection.execute(SCHEMA)
 
-    def _get(self, connection: Any, thread_id: str, action_id: str) -> LedgerEntry | None:
+    def _get(self, connection: Any, thread_id: str, action_id: str, args_hash: str) -> LedgerEntry | None:
         row = connection.execute(
             self._sql(
                 "SELECT thread_id, action_id, tool, args_hash, status, result FROM write_ledger "
-                "WHERE thread_id = ? AND action_id = ?"
+                "WHERE thread_id = ? AND action_id = ? AND args_hash = ?"
             ),
-            (thread_id, action_id),
+            (thread_id, action_id, args_hash),
         ).fetchone()
         return LedgerEntry(*row) if row else None
 
@@ -96,7 +101,7 @@ class Ledger:
         connection.execute(
             self._sql(
                 "INSERT INTO write_ledger (thread_id, action_id, tool, args_hash, status, result) "
-                "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (thread_id, action_id) DO NOTHING"
+                "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (thread_id, action_id, args_hash) DO NOTHING"
             ),
             (entry.thread_id, entry.action_id, entry.tool, entry.args_hash, entry.status, entry.result),
         )
@@ -113,8 +118,8 @@ class Ledger:
 
     # ------------------------------------------------------------ public API
 
-    async def get(self, thread_id: str, action_id: str) -> LedgerEntry | None:
-        result: LedgerEntry | None = await asyncio.to_thread(self._run_sync, self._get, thread_id, action_id)
+    async def get(self, thread_id: str, action_id: str, args_hash: str) -> LedgerEntry | None:
+        result: LedgerEntry | None = await asyncio.to_thread(self._run_sync, self._get, thread_id, action_id, args_hash)
         return result
 
     async def record(self, entry: LedgerEntry) -> None:

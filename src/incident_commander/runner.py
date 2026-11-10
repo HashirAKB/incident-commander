@@ -160,12 +160,23 @@ def _event(namespace: tuple[str, ...], mode: str, chunk: Any) -> dict[str, Any] 
     return None
 
 
-async def _drive(rt: Runtime, graph_input: Any, thread_id: str, on_event: EventSink | None) -> RunStatus:
+async def drive(
+    rt: Runtime,
+    graph_input: Any,
+    thread_id: str,
+    on_event: EventSink | None,
+    config: RunnableConfig | None = None,
+) -> RunStatus:
+    """Run the graph until it finishes or pauses, forwarding stream events.
+
+    `config` may point at an older checkpoint (time travel); by default the
+    run continues from the thread's latest checkpoint.
+    """
     labels = tracing.current_run.set(tracing.RunLabels(thread_id, rt.settings.mode))
     try:
         stream = rt.graph.astream(
             graph_input,
-            config_for(thread_id),
+            config or config_for(thread_id),
             stream_mode=["updates", "custom"],
             subgraphs=True,
             # "sync": each checkpoint is written before the next step starts, so
@@ -209,7 +220,7 @@ async def start_run(
 ) -> RunStatus:
     thread_id = validate_thread_id(thread_id or str(uuid.uuid4()))
     state = initial_state(alert, rt.settings, to_iso(rt.clock()), limits or default_limits(rt.settings))
-    return await _drive(rt, state, thread_id, on_event)
+    return await drive(rt, state, thread_id, on_event)
 
 
 async def resume_run(rt: Runtime, thread_id: str, on_event: EventSink | None = None) -> RunStatus:
@@ -217,7 +228,7 @@ async def resume_run(rt: Runtime, thread_id: str, on_event: EventSink | None = N
     status = await get_status(rt, thread_id)
     if status.phase != "interrupted":
         raise ValueError(f"run {thread_id} is {status.phase}; only an interrupted run can be resumed this way")
-    return await _drive(rt, None, thread_id, on_event)
+    return await drive(rt, None, thread_id, on_event)
 
 
 # ---------------------------------------------------------------- approvals
@@ -258,7 +269,7 @@ async def submit_decisions(
         request = await _pending_request(rt, thread_id)
         payload = {"approval_id": approval_id, "decided_at": to_iso(rt.clock()), "decisions": answers}
         normalize_decisions(cast(ApprovalRequest, request), payload, write_schemas(rt.toolbox))
-        return await _drive(rt, Command(resume=payload), thread_id, on_event)
+        return await drive(rt, Command(resume=payload), thread_id, on_event)
 
 
 async def expire_run(rt: Runtime, thread_id: str, on_event: EventSink | None = None) -> RunStatus:
@@ -269,7 +280,7 @@ async def expire_run(rt: Runtime, thread_id: str, on_event: EventSink | None = N
         if now < parse_iso(request["expires_at"]):
             raise DecisionRefused(f"approval {request['approval_id']} has not expired yet")
         payload = {"approval_id": request["approval_id"], "decided_at": to_iso(now), "expired": True}
-        return await _drive(rt, Command(resume=payload), thread_id, on_event)
+        return await drive(rt, Command(resume=payload), thread_id, on_event)
 
 
 async def list_threads(rt: Runtime) -> list[str]:

@@ -40,7 +40,8 @@ def make_executor(write_tools: dict[str, BaseTool], ledger: Ledger) -> StateConf
                         _execution(action["action_id"], action["tool"], decision["args"], "failed", str(exc))
                     )
                     continue
-                previous = await ledger.get(thread_id, action["action_id"])
+                key = args_hash(action["tool"], args)
+                previous = await ledger.get(thread_id, action["action_id"], key)
                 if previous is not None:
                     executions.append(
                         _execution(action["action_id"], action["tool"], args, "skipped_duplicate", previous.result)
@@ -52,11 +53,7 @@ def make_executor(write_tools: dict[str, BaseTool], ledger: Ledger) -> StateConf
                 status = "failed" if is_error else "executed"
                 # Recorded right after the write returns. The gap between the two
                 # lines is the at-least-once window described in ledger.py.
-                await ledger.record(
-                    LedgerEntry(
-                        thread_id, action["action_id"], action["tool"], args_hash(action["tool"], args), status, text
-                    )
-                )
+                await ledger.record(LedgerEntry(thread_id, action["action_id"], action["tool"], key, status, text))
                 executions.append(_execution(action["action_id"], action["tool"], args, status, text))
                 usage = sum_usage(usage, {"steps": 1, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0})
             return {"executions": executions, "usage": usage}
