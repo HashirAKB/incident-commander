@@ -10,21 +10,24 @@ import pytest
 
 from incident_commander import routing
 from incident_commander.config import Settings
-from incident_commander.runner import config_for, open_runtime, start_run
+from incident_commander.runner import config_for, open_runtime, start_run, submit_decisions
 from incident_commander.state import IncidentState, Limits
 from tests.conftest import alert, fixed_clock
 
 BIG: Limits = {"max_steps": 100, "max_tokens": 1_000_000, "max_cost_usd": 100.0}
 
 
-async def test_thermal_alert_completes_with_postmortem(settings: Settings) -> None:
+async def test_thermal_alert_pauses_for_approval_then_writes_postmortem(settings: Settings) -> None:
     async with open_runtime(settings, clock=fixed_clock) as rt:
         status = await start_run(rt, alert("thermal_d17"), limits=BIG)
-    assert status.phase == "finished"
-    assert status.stop_reason == "completed"
-    assert set(status.values["findings"]) == {"metrics", "events", "runbooks"}
-    assert status.values["diagnosis"]["root_cause"] == "thermal"
-    postmortem = Path(status.values["postmortem_path"]).read_text()
+        assert status.phase == "paused"
+        assert set(status.values["findings"]) == {"metrics", "events", "runbooks"}
+        assert status.values["diagnosis"]["root_cause"] == "thermal"
+        request = status.approval_request
+        assert request is not None and [a["tool"] for a in request["actions"]] == ["create_incident"]
+        done = await submit_decisions(rt, status.thread_id, request["approval_id"], {"A1": {"verdict": "reject"}})
+    assert done.phase == "finished" and done.stop_reason == "rejected"
+    postmortem = Path(done.values["postmortem_path"]).read_text()
     assert "DRAFT" in postmortem and "mode=mock" in postmortem
 
 
@@ -39,10 +42,16 @@ async def test_two_runs_with_same_input_are_byte_identical(settings: Settings) -
     outputs = []
     async with open_runtime(settings, clock=fixed_clock) as rt:
         for _ in range(2):
-            status = await start_run(rt, alert("signal_d33"), limits=BIG)
-            postmortem = Path(status.values["postmortem_path"]).read_text().replace(status.thread_id, "<id>")
-            values = {k: v for k, v in status.values.items() if k != "postmortem_path"}
-            outputs.append(json.dumps(values, sort_keys=True) + postmortem)
+            paused = await start_run(rt, alert("signal_d33"), limits=BIG)
+            request = paused.approval_request
+            assert request is not None
+            answers = {a["action_id"]: {"verdict": "approve", "args_hash": a["args_hash"]} for a in request["actions"]}
+            done = await submit_decisions(rt, paused.thread_id, request["approval_id"], answers)
+            postmortem = Path(done.values["postmortem_path"]).read_text()
+            values = json.dumps({k: v for k, v in done.values.items() if k != "postmortem_path"}, sort_keys=True)
+            text = values + postmortem
+            # Only the two random ids differ between runs.
+            outputs.append(text.replace(done.thread_id, "<thread>").replace(request["approval_id"], "<approval>"))
     assert outputs[0] == outputs[1]
 
 

@@ -38,5 +38,14 @@ def route_after_gather(state: IncidentState) -> Literal["synthesizer", "budget_s
     return "budget_stop" if over_budget(state) else "synthesizer"
 
 
-def route_after_synthesizer(state: IncidentState) -> Literal["postmortem", "budget_stop"]:
-    return "budget_stop" if over_budget(state) else "postmortem"
+def route_after_synthesizer(state: IncidentState) -> Literal["prepare_approval", "postmortem", "budget_stop"]:
+    if over_budget(state):
+        return "budget_stop"
+    return "prepare_approval" if state.get("proposed_actions") else "postmortem"
+
+
+def route_after_approval(state: IncidentState) -> Literal["executor", "postmortem"]:
+    """Only an explicit approve or edit leads to the executor. Missing = reject."""
+    decisions = state.get("decisions", {})
+    approved = any(d["verdict"] in ("approve", "edit") for d in decisions.values())
+    return "executor" if approved else "postmortem"

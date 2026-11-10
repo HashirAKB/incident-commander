@@ -11,6 +11,7 @@ from typing import Annotated, Any, TypeVar
 import typer
 
 from incident_commander import runner
+from incident_commander.approvals import DecisionRefused
 from incident_commander.config import Settings, load_settings
 from incident_commander.state import Limits
 
@@ -69,6 +70,9 @@ def run(
     max_tokens: Annotated[int | None, typer.Option(help="Token limit")] = None,
     max_cost: Annotated[float | None, typer.Option(help="Cost limit in USD")] = None,
     thread_id: Annotated[str | None, typer.Option(help="Use this thread id (UUID) instead of a new one")] = None,
+    follow: Annotated[
+        bool, typer.Option(help="After pausing, keep watching until someone else finishes the run")
+    ] = False,
 ) -> None:
     """Start a run for an alert; it stops at completion or when it needs approval."""
     settings = load_settings()
@@ -76,11 +80,20 @@ def run(
     async def go() -> runner.RunStatus:
         async with runner.open_runtime(settings) as rt:
             limits = _limits(settings, max_steps, max_tokens, max_cost)
-            return await runner.start_run(
+            status = await runner.start_run(
                 rt, runner.load_alert(alert), thread_id=thread_id, limits=limits, on_event=_print_event
             )
+            _print_status(status)
+            while follow and status.phase == "paused":
+                # The approval may come from another terminal or the API. Everything we
+                # need is in the checkpointer, so this process can die at any time.
+                await asyncio.sleep(1)
+                status = await runner.get_status(rt, status.thread_id)
+            return status
 
-    _print_status(run_async(go))
+    final = run_async(go)
+    if follow:
+        _print_status(final)
 
 
 @app.command()
@@ -97,6 +110,110 @@ def status(thread_id: str) -> None:
         typer.echo(f"no run with thread_id {thread_id}", err=True)
         raise typer.Exit(1)
     _print_status(result)
+
+
+@app.command()
+def resume(thread_id: str) -> None:
+    """Continue a run whose process died mid-step (phase: interrupted)."""
+    settings = load_settings()
+
+    async def go() -> runner.RunStatus:
+        async with runner.open_runtime(settings) as rt:
+            return await runner.resume_run(rt, thread_id, on_event=_print_event)
+
+    _print_status(run_async(go))
+
+
+@app.command()
+def pending() -> None:
+    """List runs waiting for approval."""
+    settings = load_settings()
+
+    async def go() -> list[runner.RunStatus]:
+        async with runner.open_runtime(settings) as rt:
+            return await runner.list_pending(rt)
+
+    runs = run_async(go)
+    if not runs:
+        typer.echo("no runs waiting for approval")
+    for item in runs:
+        request = item.approval_request or {}
+        alert = item.values["alert"]
+        typer.echo(
+            f"{item.thread_id}  {alert['alert_id']}  {len(request.get('actions', []))} action(s)  "
+            f"expires {request.get('expires_at')}"
+        )
+
+
+def _ask_decisions(request: dict[str, Any]) -> dict[str, Any]:
+    answers: dict[str, Any] = {}
+    for action in request["actions"]:
+        typer.echo(f"\n{action['action_id']} {action['tool']} {json.dumps(action['args'], sort_keys=True)}")
+        typer.echo(f"  rationale: {action['rationale']}\n  risk: {action['risk']}")
+        choice = typer.prompt("  [a]pprove / [e]dit / [r]eject", default="r").strip().lower()
+        if choice.startswith("a"):
+            answers[action["action_id"]] = {"verdict": "approve", "args_hash": action["args_hash"]}
+        elif choice.startswith("e"):
+            edited = typer.prompt("  new args (JSON)", default=json.dumps(action["args"], sort_keys=True))
+            answers[action["action_id"]] = {
+                "verdict": "edit",
+                "args_hash": action["args_hash"],
+                "args": json.loads(edited),
+            }
+        else:
+            answers[action["action_id"]] = {"verdict": "reject"}
+    return answers
+
+
+def _fill_hashes(request: dict[str, Any], answers: dict[str, Any]) -> dict[str, Any]:
+    """A decisions file may omit args_hash; it then binds to the request shown in this session."""
+    hashes = {a["action_id"]: a["args_hash"] for a in request["actions"]}
+    return {aid: {"args_hash": hashes.get(aid, "")} | answer for aid, answer in answers.items()}
+
+
+@app.command()
+def approve(
+    thread_id: str,
+    decisions_file: Annotated[
+        Path | None, typer.Option(help='JSON {"A1": {"verdict": "approve"}, ...}; omit to answer interactively')
+    ] = None,
+) -> None:
+    """Approve, edit or reject each pending action of a paused run, then resume it."""
+    settings = load_settings()
+
+    async def go() -> runner.RunStatus:
+        async with runner.open_runtime(settings) as rt:
+            status = await runner.get_status(rt, thread_id)
+            request = status.approval_request
+            if request is None:
+                raise DecisionRefused(f"run {thread_id} is {status.phase}, not waiting for approval")
+            typer.echo(f"approval {request['approval_id']} expires {request['expires_at']}")
+            if decisions_file:
+                answers = _fill_hashes(request, json.loads(decisions_file.read_text(encoding="utf-8")))
+            else:
+                answers = _ask_decisions(request)
+            return await runner.submit_decisions(rt, thread_id, request["approval_id"], answers, on_event=_print_event)
+
+    try:
+        _print_status(run_async(go))
+    except (DecisionRefused, runner.RunNotFound) as exc:
+        typer.echo(f"refused: {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+
+@app.command("sweep-expired")
+def sweep_expired() -> None:
+    """Expire every paused run whose approval deadline has passed (expiry = reject)."""
+    settings = load_settings()
+
+    async def go() -> list[str]:
+        async with runner.open_runtime(settings) as rt:
+            return await runner.sweep_expired(rt)
+
+    expired = run_async(go)
+    typer.echo(f"expired {len(expired)} run(s)")
+    for thread_id in expired:
+        typer.echo(f"  {thread_id}")
 
 
 if __name__ == "__main__":

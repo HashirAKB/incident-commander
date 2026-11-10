@@ -19,4 +19,28 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run mypy
+      # Unit, integration and crash tests on SQLite (Postgres variants skip here).
       - run: uv run pytest -q
+
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ic
+          POSTGRES_PASSWORD: ic
+          POSTGRES_DB: ic
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://ic:ic@localhost:5432/ic
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --frozen
+      # Checkpointer, ledger and crash tests against Postgres.
+      - run: uv run pytest -q -m postgres

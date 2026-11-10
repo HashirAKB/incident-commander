@@ -7,6 +7,7 @@ that is what makes "pause for approval, die, resume elsewhere" work.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import uuid
@@ -18,18 +19,22 @@ from typing import Any, Literal, cast
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.runnables import RunnableConfig
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph.state import CompiledStateGraph
+from langgraph.types import Command
 
 from incident_commander import tracing
+from incident_commander.approvals import DecisionRefused, normalize_decisions
 from incident_commander.checkpointer import get_checkpointer
 from incident_commander.config import Settings
-from incident_commander.graph import RECURSION_LIMIT, GraphDeps, build_graph
+from incident_commander.graph import RECURSION_LIMIT, GraphDeps, build_graph, write_schemas
+from incident_commander.ledger import Ledger
 from incident_commander.mcp_bridge import open_toolbox
 from incident_commander.models.factory import get_chat_model
 from incident_commander.nodes.postmortem import render_postmortem, write_postmortem
 from incident_commander.paths import validate_thread_id
 from incident_commander.registry import Toolbox
-from incident_commander.state import EMPTY_USAGE, Alert, IncidentState, Limits
+from incident_commander.state import EMPTY_USAGE, Alert, ApprovalRequest, IncidentState, Limits
 from incident_commander.timeutil import Clock, parse_iso, system_clock, to_iso
 
 RunPhase = Literal["paused", "finished", "interrupted", "not_found"]
@@ -47,6 +52,7 @@ class Runtime:
     settings: Settings
     graph: CompiledStateGraph[Any, Any, Any, Any]
     toolbox: Toolbox
+    checkpointer: BaseCheckpointSaver[Any]
     clock: Clock = system_clock
 
 
@@ -55,6 +61,7 @@ class RunStatus:
     thread_id: str
     phase: RunPhase
     values: dict[str, Any] = field(default_factory=dict)
+    pending_interrupt: dict[str, Any] | None = None  # what LangGraph says the run is waiting for
 
     @property
     def stop_reason(self) -> str | None:
@@ -62,7 +69,7 @@ class RunStatus:
 
     @property
     def approval_request(self) -> dict[str, Any] | None:
-        return self.values.get("approval_request") if self.phase == "paused" else None
+        return self.pending_interrupt if self.phase == "paused" else None
 
 
 @asynccontextmanager
@@ -78,9 +85,17 @@ async def open_runtime(
         deps = GraphDeps(
             model=model or get_chat_model(settings, compromised=compromised),
             toolbox=toolbox,
+            ledger=Ledger(settings),
             runs_dir=settings.runs_dir,
+            clock=clock,
         )
-        yield Runtime(settings=settings, graph=build_graph(deps, checkpointer), toolbox=toolbox, clock=clock)
+        yield Runtime(
+            settings=settings,
+            graph=build_graph(deps, checkpointer),
+            toolbox=toolbox,
+            checkpointer=checkpointer,
+            clock=clock,
+        )
 
 
 def config_for(thread_id: str) -> RunnableConfig:
@@ -126,12 +141,10 @@ async def get_status(rt: Runtime, thread_id: str) -> RunStatus:
     if not snapshot.values:
         return RunStatus(thread_id, "not_found")
     if snapshot.interrupts:
-        phase: RunPhase = "paused"
-    elif not snapshot.next:
-        phase = "finished"
-    else:
-        phase = "interrupted"  # the process died mid-step; resume_run continues it
-    return RunStatus(thread_id, phase, dict(snapshot.values))
+        return RunStatus(thread_id, "paused", dict(snapshot.values), dict(snapshot.interrupts[0].value))
+    if not snapshot.next:
+        return RunStatus(thread_id, "finished", dict(snapshot.values))
+    return RunStatus(thread_id, "interrupted", dict(snapshot.values))  # died mid-step; see resume_run
 
 
 def _event(namespace: tuple[str, ...], mode: str, chunk: Any) -> dict[str, Any] | None:
@@ -205,3 +218,82 @@ async def resume_run(rt: Runtime, thread_id: str, on_event: EventSink | None = N
     if status.phase != "interrupted":
         raise ValueError(f"run {thread_id} is {status.phase}; only an interrupted run can be resumed this way")
     return await _drive(rt, None, thread_id, on_event)
+
+
+# ---------------------------------------------------------------- approvals
+
+_thread_locks: dict[str, asyncio.Lock] = {}
+
+
+def _lock(thread_id: str) -> asyncio.Lock:
+    """One resume at a time per thread within this process.
+
+    Two processes answering the same approval at the same instant is not
+    covered: both could pass validation. The API serializes per thread; run one
+    API process per checkpointer (documented in SECURITY.md).
+    """
+    return _thread_locks.setdefault(thread_id, asyncio.Lock())
+
+
+async def _pending_request(rt: Runtime, thread_id: str) -> dict[str, Any]:
+    status = await get_status(rt, thread_id)
+    if status.phase == "not_found":
+        raise RunNotFound(thread_id)
+    if status.phase != "paused" or status.pending_interrupt is None:
+        raise DecisionRefused(f"run {thread_id} is {status.phase}, not waiting for approval")
+    if status.pending_interrupt.get("approval_id") != status.values["approval_request"]["approval_id"]:
+        raise DecisionRefused("pending interrupt does not match the stored approval request")
+    return status.pending_interrupt
+
+
+async def submit_decisions(
+    rt: Runtime,
+    thread_id: str,
+    approval_id: str,
+    answers: dict[str, Any],
+    on_event: EventSink | None = None,
+) -> RunStatus:
+    """Validate an approver's answers and resume the run. Raises DecisionRefused (HTTP 409)."""
+    async with _lock(thread_id):
+        request = await _pending_request(rt, thread_id)
+        payload = {"approval_id": approval_id, "decided_at": to_iso(rt.clock()), "decisions": answers}
+        normalize_decisions(cast(ApprovalRequest, request), payload, write_schemas(rt.toolbox))
+        return await _drive(rt, Command(resume=payload), thread_id, on_event)
+
+
+async def expire_run(rt: Runtime, thread_id: str, on_event: EventSink | None = None) -> RunStatus:
+    """Resume a paused run whose approval deadline has passed, with every action expired."""
+    async with _lock(thread_id):
+        request = await _pending_request(rt, thread_id)
+        now = rt.clock()
+        if now < parse_iso(request["expires_at"]):
+            raise DecisionRefused(f"approval {request['approval_id']} has not expired yet")
+        payload = {"approval_id": request["approval_id"], "decided_at": to_iso(now), "expired": True}
+        return await _drive(rt, Command(resume=payload), thread_id, on_event)
+
+
+async def list_threads(rt: Runtime) -> list[str]:
+    """Every thread id in the checkpointer, oldest first (top-level graphs only)."""
+    seen: dict[str, None] = {}
+    async for checkpoint in rt.checkpointer.alist(None):
+        configurable = checkpoint.config["configurable"]
+        if configurable.get("checkpoint_ns", "") == "":
+            seen[str(configurable["thread_id"])] = None
+    return list(reversed(seen))
+
+
+async def list_pending(rt: Runtime) -> list[RunStatus]:
+    statuses = [await get_status(rt, thread_id) for thread_id in await list_threads(rt)]
+    return [s for s in statuses if s.phase == "paused"]
+
+
+async def sweep_expired(rt: Runtime) -> list[str]:
+    """Expire every paused run past its deadline. Returns the expired thread ids."""
+    expired = []
+    now = rt.clock()
+    for status in await list_pending(rt):
+        request = status.pending_interrupt or {}
+        if now >= parse_iso(request["expires_at"]):
+            await expire_run(rt, status.thread_id)
+            expired.append(status.thread_id)
+    return expired
