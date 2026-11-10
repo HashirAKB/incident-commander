@@ -9,7 +9,13 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
       - run: uv sync --frozen
+      # The real telemetry-ops-copilot server at the pinned SHA, so contract and
+      # integration tests run against it and not only against the stub.
+      - run: ./scripts/fetch_telemetry.sh
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run mypy

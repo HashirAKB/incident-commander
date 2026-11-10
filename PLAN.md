@@ -6,8 +6,8 @@ Resume from this file alone: read "In progress" and "Next", then the milestone t
 
 | id | status | started (date -u) | finished (date -u) | verified by |
 | --- | --- | --- | --- | --- |
-| M0 spec and skeleton | in progress | 2026-11-10 20:08 UTC | | ruff, mypy, pytest |
-| M1 MCP bridge | todo | | | tests/test_mcp_contract.py |
+| M0 spec and skeleton | done | 2026-11-10 20:08 UTC | 2026-11-10 20:15 UTC | ruff, mypy, pytest |
+| M1 MCP bridge | done | 2026-11-10 20:16 UTC | 2026-11-10 20:40 UTC | tests/test_mcp_contract.py |
 | M2 models and budgets | todo | | | tests/test_models.py tests/test_budgets.py |
 | M3 graph without writes | todo | | | ic run + tests/test_graph.py |
 | M4 approval and durability | todo | | | tests/test_crash.py tests/test_structural_safety.py |
@@ -19,11 +19,11 @@ Resume from this file alone: read "In progress" and "Next", then the milestone t
 
 ## In progress
 
-M0.
+M2.
 
 ## Next
 
-M1: servers/seed.py, servers/telemetry_stub, servers/fleet_context, registry, docs/mcp-contract.md.
+M2: FakeChatModel (incl. compromised mode), provider factory, pricing.toml, usage accounting, budgets.
 
 ## Blockers
 
