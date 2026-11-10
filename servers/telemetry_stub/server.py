@@ -40,7 +40,7 @@ READ = ToolAnnotations(readOnlyHint=True, destructiveHint=False)
 WRITE = ToolAnnotations(readOnlyHint=False, destructiveHint=False)
 DESTRUCTIVE = ToolAnnotations(readOnlyHint=False, destructiveHint=True)
 
-mcp = FastMCP("telemetry-ops")
+mcp = FastMCP("telemetry-ops", log_level="WARNING")
 
 
 @cache

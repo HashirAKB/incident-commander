@@ -1,0 +1,24 @@
+# Model prices in USD per million tokens.
+
+[mock]
+# FAKE prices. Mock mode uses them so cost limits and cost reporting can be
+# tested deterministically. They say nothing about real spend.
+note = "fake prices for mock mode, not real"
+input_per_mtok = 1.0
+output_per_mtok = 5.0
+
+[live]
+source = "Anthropic first-party API price table (Claude API reference, table cached 2026-11-03)"
+checked = "2026-11-10"
+
+[live.models."claude-sonnet-5-5"]
+input_per_mtok = 2.0
+output_per_mtok = 10.0
+
+[live.models."claude-opus-5-5"]
+input_per_mtok = 4.0
+output_per_mtok = 20.0
+
+[live.models."claude-haiku-5-5"]
+input_per_mtok = 0.10
+output_per_mtok = 0.50

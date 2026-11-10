@@ -21,7 +21,7 @@ DeviceId = Annotated[str, Field(pattern=r"^D-\d{2}$", description='Device id, e.
 Since = Annotated[str, Field(description="ISO 8601 UTC timestamp, e.g. 2026-02-28T00:00:00Z")]
 READ_ONLY = ToolAnnotations(readOnlyHint=True, destructiveHint=False)
 
-mcp = FastMCP("fleet-context")
+mcp = FastMCP("fleet-context", log_level="WARNING")
 
 
 def _require_device(device_id: str) -> seed.Device:

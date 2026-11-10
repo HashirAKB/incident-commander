@@ -1,0 +1,7 @@
+{
+  "root_cause": "no_fault",
+  "confidence": 0.7,
+  "summary": "Recorded response: no telemetry supports the pressure alert; likely a misconfigured third-party sensor.",
+  "evidence": ["F-events", "F-metrics"],
+  "actions": []
+}

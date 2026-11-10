@@ -1,0 +1,6 @@
+{
+  "category": "unknown",
+  "severity": "low",
+  "investigators": ["metrics", "events"],
+  "rationale": "Recorded response: an enclosure pressure sensor is not a metric this fleet reports, so triage casts a narrow net."
+}
