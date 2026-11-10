@@ -1,0 +1,1 @@
+{"alert_id": "alrt-thermal-d17", "target": "D-17", "metric": "temperature", "summary": "D-17 temperature above 60 C", "fired_at": "2026-03-01T00:00:00Z", "site": "warehouse-c"}

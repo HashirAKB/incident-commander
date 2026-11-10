@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from datetime import datetime
 from pathlib import Path
 
 import pytest
 
 from incident_commander.config import Settings, load_settings
+from incident_commander.state import Alert
 
 
 @pytest.fixture(autouse=True)
@@ -25,3 +27,19 @@ def isolated_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[No
 @pytest.fixture
 def settings() -> Settings:
     return load_settings()
+
+
+FIXED_NOW = "2026-03-01T00:05:00Z"
+ALERTS_DIR = Path(__file__).parent / "fixtures" / "alerts"
+
+
+def fixed_clock() -> datetime:
+    from incident_commander.timeutil import parse_iso
+
+    return parse_iso(FIXED_NOW)
+
+
+def alert(name: str) -> Alert:
+    from incident_commander.runner import load_alert
+
+    return load_alert(ALERTS_DIR / f"{name}.json")

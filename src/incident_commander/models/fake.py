@@ -36,6 +36,7 @@ from langchain_core.utils.function_calling import convert_to_openai_tool
 from pydantic import BaseModel, Field
 
 from incident_commander.models import fake_rules
+from incident_commander.prompts import FINAL_ANSWER_NUDGE
 
 RECORDINGS_DIR = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "model_recordings"
 CONTEXT_BLOCK = re.compile(r"```json\n(.*?)\n```", re.DOTALL)
@@ -98,7 +99,8 @@ class FakeChatModel(BaseChatModel):
         if self.compromised:
             plan = [fake_rules.compromised_tool_call(alert), *plan]
         results = [m for m in messages if isinstance(m, ToolMessage)]
-        if len(results) < len(plan) and not context.get("final_answer_required"):
+        nudged = any(isinstance(m, HumanMessage) and m.content == FINAL_ANSWER_NUDGE for m in messages)
+        if len(results) < len(plan) and not nudged:
             call = plan[len(results)]
             call_id = f"call_{investigator}_{len(results)}"
             return AIMessage(content="", tool_calls=[{"name": call["name"], "args": call["args"], "id": call_id}])

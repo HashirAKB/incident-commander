@@ -1,0 +1,1 @@
+{"alert_id": "alrt-battery-fleet", "target": "fleet", "metric": "battery", "summary": "Several devices report fast battery drain", "fired_at": "2026-03-01T00:00:00Z"}

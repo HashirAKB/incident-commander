@@ -1,0 +1,1 @@
+{"alert_id": "alrt-signal-d33", "target": "D-33", "metric": "signal", "summary": "D-33 signal below -100 dBm", "fired_at": "2026-03-01T00:00:00Z", "site": "plant-a"}

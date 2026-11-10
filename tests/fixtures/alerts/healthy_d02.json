@@ -1,0 +1,1 @@
+{"alert_id": "alrt-healthy-d02", "target": "D-02", "metric": "temperature", "summary": "D-02 temperature flapping alert", "fired_at": "2026-03-01T00:00:00Z"}

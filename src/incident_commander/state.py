@@ -151,6 +151,7 @@ class IncidentState(TypedDict):
     usage: Annotated[Usage, sum_usage]
     diagnosis: NotRequired[Diagnosis]
     proposed_actions: NotRequired[list[ProposedAction]]
+    dropped_proposals: NotRequired[list[str]]  # model proposals that failed validation
     approval_request: NotRequired[ApprovalRequest]
     decisions: NotRequired[dict[str, Decision]]
     executions: NotRequired[list[Execution]]
