@@ -1,0 +1,60 @@
+[project]
+name = "incident-commander"
+version = "0.1.0"
+description = "LangGraph multi-agent IoT incident response with durable human approval."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = [
+    "langgraph==1.2.20",
+    "langchain-core==1.7.7",
+    "langchain-anthropic==1.7.10",
+    "langchain-mcp-adapters==0.3.2",
+    "langgraph-checkpoint-sqlite==3.1.3",
+    "langgraph-checkpoint-postgres==3.2.0",
+    "psycopg[binary]>=3.2",
+    "mcp>=1.24,<2",
+    "fastapi==0.162.4",
+    "uvicorn>=0.30",
+    "typer==0.29.0",
+    "opentelemetry-sdk==1.45.2",
+]
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.8", "mypy>=1.13", "httpx>=0.27"]
+
+[project.scripts]
+ic = "incident_commander.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/incident_commander", "servers"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src", "servers", "evals", "scripts"]
+strict = true
+ignore_missing_imports = true
+# LangChain and LangGraph types are partly untyped; we keep strict checks on our own code.
+disallow_subclassing_any = false
+disallow_untyped_decorators = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+  "postgres: needs DATABASE_URL",
+  "real_telemetry: needs the vendored telemetry-ops-copilot server",
+  "live: needs ANTHROPIC_API_KEY",
+]
