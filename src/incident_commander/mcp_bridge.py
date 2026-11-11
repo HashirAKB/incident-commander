@@ -18,7 +18,7 @@ from typing import Any
 
 from langchain_core.messages import ToolMessage
 from langchain_mcp_adapters.client import MultiServerMCPClient
-from langchain_mcp_adapters.sessions import Connection, StdioConnection
+from langchain_mcp_adapters.sessions import Connection, StdioConnection, StreamableHttpConnection
 from langchain_mcp_adapters.tools import load_mcp_tools
 
 from incident_commander.config import VENDOR_TELEMETRY_DIR, Settings
@@ -53,7 +53,12 @@ def _python_server(module: str, settings: Settings) -> StdioConnection:
 
 
 def connections(settings: Settings) -> dict[str, Connection]:
-    if use_real_telemetry(settings):
+    telemetry: Connection
+    if settings.telemetry_url:
+        # A telemetry server running as its own service (docker compose), over HTTP.
+        headers = {"Authorization": f"Bearer {settings.telemetry_token}"} if settings.telemetry_token else None
+        telemetry = StreamableHttpConnection(transport="streamable_http", url=settings.telemetry_url, headers=headers)
+    elif use_real_telemetry(settings):
         vendor = PROJECT_ROOT / VENDOR_TELEMETRY_DIR
         telemetry = StdioConnection(
             transport="stdio",

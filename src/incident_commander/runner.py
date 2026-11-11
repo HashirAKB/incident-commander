@@ -81,6 +81,7 @@ async def open_runtime(
     model: BaseChatModel | None = None,
 ) -> AsyncIterator[Runtime]:
     tracing.init_tracing(settings.traces_dir)
+    tracing.configure_langsmith()
     async with get_checkpointer(settings) as checkpointer, open_toolbox(settings) as toolbox:
         deps = GraphDeps(
             model=model or get_chat_model(settings, compromised=compromised),

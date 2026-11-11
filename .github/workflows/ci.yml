@@ -25,6 +25,8 @@ jobs:
       # and must reproduce the committed results byte for byte.
       - run: uv run python -m evals.run --mode mock
       - run: git diff --exit-code evals/results/
+      # Required docs exist, no em dashes, README/COMPARISON numbers match their scripts.
+      - run: uv run python -m scripts.check_dod
 
   postgres:
     runs-on: ubuntu-latest
@@ -48,3 +50,14 @@ jobs:
       - run: uv sync --frozen
       # Checkpointer, ledger and crash tests against Postgres.
       - run: uv run pytest -q -m postgres
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compose file is valid
+        run: APPROVER_TOKEN=ci TELEMETRY_MCP_TOKEN=ci docker compose config -q
+      - name: Build the app image
+        run: docker build --target app -t incident-commander-app .
+      - name: Build the telemetry image (real server at the pinned SHA)
+        run: docker build --target telemetry -t incident-commander-telemetry .

@@ -1,0 +1,47 @@
+# Full stack: API + approval page, Postgres checkpoints, and the real telemetry
+# server built from the pinned commit. Secrets come from your environment / .env:
+#   APPROVER_TOKEN=... TELEMETRY_MCP_TOKEN=... docker compose up --build
+# The approval page is published on 127.0.0.1 only.
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ic
+      POSTGRES_PASSWORD: ic
+      POSTGRES_DB: ic
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ic"]
+      interval: 5s
+      retries: 10
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  telemetry:
+    build:
+      context: .
+      target: telemetry
+    environment:
+      MCP_API_TOKEN: ${TELEMETRY_MCP_TOKEN:?set TELEMETRY_MCP_TOKEN}
+
+  app:
+    build:
+      context: .
+      target: app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      telemetry:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://ic:ic@postgres:5432/ic
+      IC_TELEMETRY_URL: http://telemetry:3001/mcp
+      TELEMETRY_MCP_TOKEN: ${TELEMETRY_MCP_TOKEN:?set TELEMETRY_MCP_TOKEN}
+      APPROVER_TOKEN: ${APPROVER_TOKEN:?set APPROVER_TOKEN}
+      APPROVAL_TTL: ${APPROVAL_TTL:-4h}
+      IC_MODE: ${IC_MODE:-mock}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports:
+      - "127.0.0.1:8000:8000"
+
+volumes:
+  pgdata:

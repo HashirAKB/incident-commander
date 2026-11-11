@@ -1,0 +1,49 @@
+# Captured by scripts/capture_transcripts.py (mode=mock, telemetry stub). Real output, not edited.
+
+GET /runs/7822fd45-18ec-4ebd-aece-0d9a6632cded/events
+
+event: snapshot
+data: {"alert": {"alert_id": "alrt-signal-d33", "fired_at": "2026-03-01T00:00:00Z", "metric": "signal", "site": "plant-a", "summary": "D-33 signal below -100 dBm", "target": "D-33"}, "approval_request": {"actions": [{"action_id": "A1", "args": {"device_id": "D-33", "reason": "Clear a stuck radio sta ...
+
+event: node
+data: {"node": "triage", "type": "node", "update": {"triage": {"category": "connectivity", "investigators": ["metrics", "events", "runbooks"], "rationale": "Alert metric 'signal' maps to category 'connectivity'.", "severity": "high"}, "usage": {"cost_usd": 0.000472, "input_tokens": 212, "output_toke ...
+
+event: progress
+data: {"investigator": "metrics", "tool": "detect_anomalies", "type": "progress"}
+
+event: progress
+data: {"investigator": "events", "tool": "get_device_events", "type": "progress"}
+
+event: progress
+data: {"investigator": "runbooks", "tool": "search_runbooks", "type": "progress"}
+
+event: progress
+data: {"investigator": "metrics", "tool": "detect_anomalies", "type": "progress"}
+
+event: node
+data: {"node": "investigate", "type": "node", "update": {"findings": {"events": {"blocked_tool_calls": [], "finding_id": "F-events", "investigator": "events", "summary": "event 2026-02-28T21:48:00Z maintenance: \"Antenna cable reseated by a technician.\"\nevent 2026-02-28T22:00:00Z link_lost: \"Radi ...
+
+event: node
+data: {"node": "investigate", "type": "node", "update": {"findings": {"runbooks": {"blocked_tool_calls": [], "finding_id": "F-runbooks", "investigator": "runbooks", "summary": "runbook match: Connectivity loss (weak signal) (runbook://connectivity-loss)\nrunbook match: Device restart procedure (runb ...
+
+event: progress
+data: {"investigator": "metrics", "tool": "get_metrics", "type": "progress"}
+
+event: node
+data: {"node": "investigate", "type": "node", "update": {"findings": {"metrics": {"blocked_tool_calls": [], "finding_id": "F-metrics", "investigator": "metrics", "summary": "signal low ongoing on D-33 (score 20.6)\nsignal low ongoing on D-33 (score 15.2)\nlatest battery 54.74, signal -110.06, temper ...
+
+event: node
+data: {"node": "gather", "type": "node", "update": {}}
+
+event: node
+data: {"node": "synthesizer", "type": "node", "update": {"diagnosis": {"confidence": 0.8, "evidence": ["F-events", "F-metrics", "F-runbooks"], "root_cause": "connectivity", "summary": "Signal dropout on D-33."}, "dropped_proposals": [], "proposed_actions": [{"action_id": "A1", "args": {"device_id":  ...
+
+event: node
+data: {"node": "prepare_approval", "type": "node", "update": {"approval_request": {"actions": [{"action_id": "A1", "args": {"device_id": "D-33", "reason": "Clear a stuck radio state (connectivity-loss runbook step 2)."}, "args_hash": "38473371c8cb1dd15aaa13863bdefd99fc502eb137d5439abc32bb4f3487c2e1" ...
+
+event: approval_requested
+data: {"approval_request": {"actions": [{"action_id": "A1", "args": {"device_id": "D-33", "reason": "Clear a stuck radio state (connectivity-loss runbook step 2)."}, "args_hash": "38473371c8cb1dd15aaa13863bdefd99fc502eb137d5439abc32bb4f3487c2e1", "rationale": "Clear a stuck radio state (connectivity ...
+
+event: end
+data: {"phase": "paused", "stop_reason": null, "type": "end"}
+

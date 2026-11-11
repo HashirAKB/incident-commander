@@ -1,0 +1,12 @@
+{
+  "cold_runs": 5,
+  "machine": "Linux x86_64, Python 3.13.18",
+  "median_ms": {
+    "graph_cold_cli_healthy_alert": 2176,
+    "graph_warm_approve_two_writes": 91,
+    "graph_warm_no_action": 67,
+    "ts_loop_cold_cli_healthy_question": 576
+  },
+  "mode": "mock",
+  "warm_runs": 10
+}

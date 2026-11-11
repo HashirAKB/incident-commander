@@ -110,3 +110,12 @@ Assets: fleet devices (restart is destructive), incident tracker, approver token
 - D1. `gh` CLI token invalid in the build environment; the repository was created by the owner
   and attached through the GitHub connector. Pushes use plain git.
 - D2. `mcp==2.x` conflicts with `langchain-mcp-adapters 0.3.2` (needs `mcp<2`); pinned `mcp` 1.x.
+- D3. The real telemetry server runs in tests over stdio (vendored, Node available) and, for docker compose,
+  over streamable HTTP as its own service (`IC_TELEMETRY_URL`). Evals always use the Python stub so results
+  are byte-identical everywhere.
+- D4. Docker builds could not complete in the build sandbox (Docker Hub 429 rate limit; build containers do
+  not trust the sandbox HTTPS proxy). `docker compose config` passes locally; image builds run in CI only.
+  Compose was not run end to end locally.
+- D5. Playwright screenshots replaced by text transcripts captured by `scripts/capture_transcripts.py`
+  (docs/screenshots/*.txt): CLI flow, SSE stream and HTTP approval flow from real runs.
+

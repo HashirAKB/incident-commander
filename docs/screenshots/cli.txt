@@ -1,0 +1,80 @@
+# Captured by scripts/capture_transcripts.py (mode=mock, telemetry stub). Real output, not edited.
+
+$ ic run --alert tests/fixtures/alerts/signal_d33.json
+  [node] triage
+  [progress] metrics: detect_anomalies
+  [progress] events: get_device_events
+  [progress] runbooks: search_runbooks
+  [node] investigate
+  [progress] metrics: detect_anomalies
+  [node] investigate
+  [progress] metrics: get_metrics
+  [node] investigate
+  [node] gather
+  [node] synthesizer
+  [node] prepare_approval
+  [paused] waiting for approval 433f04f0-84b8-402e-8312-9d02d99ed0f7
+thread_id:   2af4418c-06fd-461b-bbf9-7d64d750ba71
+phase:       paused
+mode:        mock
+diagnosis:   connectivity (0.80) Signal dropout on D-33.
+approval:    433f04f0-84b8-402e-8312-9d02d99ed0f7 expires 2026-11-11T07:39:04Z
+  A1 restart_device {"device_id": "D-33", "reason": "Clear a stuck radio state (connectivity-loss runbook step 2)."}  (risk: medium: about 2 minutes of downtime for one device)
+  A2 create_incident {"description": "Signal dropout on D-33.", "device_id": "D-33", "severity": "medium", "title": "Signal loss on D-33"}  (risk: low: opens a ticket, no device impact)
+
+$ ic pending
+2af4418c-06fd-461b-bbf9-7d64d750ba71  alrt-signal-d33  2 action(s)  expires 2026-11-11T07:39:04Z
+
+$ ic approve 2af4418c-06fd-461b-bbf9-7d64d750ba71 --decisions-file decisions.json   # A1 approve, A2 reject
+approval 433f04f0-84b8-402e-8312-9d02d99ed0f7 expires 2026-11-11T07:39:04Z
+  [node] approval
+  [node] executor
+  [node] postmortem
+thread_id:   2af4418c-06fd-461b-bbf9-7d64d750ba71
+phase:       finished
+mode:        mock
+stop_reason: completed
+diagnosis:   connectivity (0.80) Signal dropout on D-33.
+postmortem:  <tmp>/runs/2af4418c-06fd-461b-bbf9-7d64d750ba71/postmortem.md
+
+$ ic history 2af4418c-06fd-461b-bbf9-7d64d750ba71
+step  -1  1f1dd817-16a0-6802-bfff-ed821902e431  next=__start__        input only
+step   0  1f1dd817-16a2-6d4f-8000-65a9c3dd551e  next=triage           input only
+step   1  1f1dd817-16af-6f61-8001-e75ee8551c5d  next=investigate,investigate,investigate triage=connectivity
+step   2  1f1dd817-1761-63bb-8002-793040a7417a  next=gather           triage=connectivity findings=events,metrics,runbooks
+step   3  1f1dd817-1768-699e-8003-b205105729aa  next=synthesizer      triage=connectivity findings=events,metrics,runbooks
+step   4  1f1dd817-1777-6638-8004-c9fee4f1926b  next=prepare_approval triage=connectivity findings=events,metrics,runbooks diagnosis=connectivity actions=2
+step   5  1f1dd817-177d-617c-8005-6f086e3ac30a  next=approval         triage=connectivity findings=events,metrics,runbooks diagnosis=connectivity actions=2
+step   6  1f1dd817-3b07-648f-8006-61e7eec80267  next=executor         triage=connectivity findings=events,metrics,runbooks diagnosis=connectivity actions=2 decisions=A1:approve,A2:reject
+step   7  1f1dd817-3b3d-67ff-8007-27a1a5c2303a  next=postmortem       triage=connectivity findings=events,metrics,runbooks diagnosis=connectivity actions=2 decisions=A1:approve,A2:reject executed=A1:executed
+step   8  1f1dd817-3b43-66c7-8008-49487a1e6dc7  next=END              triage=connectivity findings=events,metrics,runbooks diagnosis=connectivity actions=2 decisions=A1:approve,A2:reject executed=A1:executed stop_reason=completed
+
+$ ic trace 2af4418c-06fd-461b-bbf9-7d64d750ba71 | head -25
+      0.0ms      2.1ms  node triage
+      0.1ms      1.7ms    model triage  tokens.input=212 tokens.output=52 cost_usd=0.000472
+     11.7ms      4.0ms  model investigate:metrics  tokens.input=560 tokens.output=24 cost_usd=0.00068
+     17.1ms      1.4ms  model investigate:events  tokens.input=337 tokens.output=24 cost_usd=0.000457
+     20.0ms      1.7ms  model investigate:runbooks  tokens.input=274 tokens.output=19 cost_usd=0.000369
+     23.7ms     15.6ms  tool detect_anomalies
+     26.3ms      4.1ms  tool get_device_events
+     28.9ms     12.1ms  tool search_runbooks
+     32.6ms      1.3ms  model investigate:events  tokens.input=454 tokens.output=44 cost_usd=0.000674
+     36.7ms      0.0ms  node investigate:events
+     43.8ms      1.4ms  model investigate:metrics  tokens.input=668 tokens.output=24 cost_usd=0.000788
+     48.0ms      1.3ms  model investigate:runbooks  tokens.input=909 tokens.output=49 cost_usd=0.001154
+     52.5ms      4.1ms  tool detect_anomalies
+     55.0ms      0.0ms  node investigate:runbooks
+     60.1ms      1.3ms  model investigate:metrics  tokens.input=775 tokens.output=18 cost_usd=0.000865
+     64.0ms      3.2ms  tool get_metrics
+     69.7ms      1.2ms  model investigate:metrics  tokens.input=1418 tokens.output=38 cost_usd=0.001608
+     73.5ms      0.0ms  node investigate:metrics
+     78.0ms      0.0ms  node gather
+     81.1ms      2.9ms  node synthesizer
+     81.2ms      0.8ms    model synthesizer  tokens.input=509 tokens.output=186 cost_usd=0.001439
+     86.7ms      0.1ms  node prepare_approval
+   3812.4ms      0.0ms  node approval
+   3818.3ms     17.1ms  node executor
+   3819.8ms     13.0ms    tool restart_device
+
+$ cat <tmp>/writes.jsonl   # the telemetry server's own write log
+{"args": {"device_id": "D-33", "reason": "Clear a stuck radio state (connectivity-loss runbook step 2)."}, "tool": "restart_device"}

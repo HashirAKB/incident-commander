@@ -1,7 +1,7 @@
 """All configuration comes from environment variables, with safe local defaults.
 
 Read once per process with `load_settings()`. Nothing here is secret except the
-two tokens, which are kept out of state, traces and logs (see tracing.py).
+tokens, which are kept out of state, traces and logs (see tracing.py).
 """
 
 from __future__ import annotations
@@ -30,6 +30,8 @@ class Settings:
     approval_ttl_seconds: int
     approver_token: str | None
     telemetry_backend: TelemetryBackend
+    telemetry_url: str | None  # MCP over streamable HTTP (e.g. the compose service); overrides the backend
+    telemetry_token: str | None
     write_log: Path
     max_steps: int
     max_tokens: int
@@ -76,6 +78,8 @@ def load_settings() -> Settings:
         approval_ttl_seconds=parse_duration(os.environ.get("APPROVAL_TTL", "4h")),
         approver_token=os.environ.get("APPROVER_TOKEN") or None,
         telemetry_backend=_telemetry_backend(),
+        telemetry_url=os.environ.get("IC_TELEMETRY_URL") or None,
+        telemetry_token=os.environ.get("TELEMETRY_MCP_TOKEN") or None,
         write_log=Path(os.environ.get("IC_WRITE_LOG", str(data_dir / "stub-writes.jsonl"))),
         max_steps=int(os.environ.get("IC_MAX_STEPS", "40")),
         max_tokens=int(os.environ.get("IC_MAX_TOKENS", "60000")),

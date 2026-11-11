@@ -14,17 +14,19 @@ Resume from this file alone: read "In progress" and "Next", then the milestone t
 | M5 time travel and tracing | done | 2026-11-10 20:40 UTC | 2026-11-10 20:42 UTC | tests/test_timetravel.py tests/test_tracing.py |
 | M6 API and approval page | done | 2026-11-10 20:43 UTC | 2026-11-10 20:49 UTC | tests/test_api.py |
 | M7 evals | done | 2026-11-10 20:50 UTC | 2026-11-10 20:57 UTC | python -m evals.run --mode mock |
-| M8 comparison, packaging, docs | todo | | | scripts/check_dod.py |
+| M8 comparison, packaging, docs | done | 2026-11-10 20:57 UTC | 2026-11-11 03:45 UTC | scripts/check_dod.py |
 | Final reviewer pass | todo | | | all of the above |
 
 ## In progress
 
-M8.
+Final reviewer pass.
 
 ## Next
 
-M8: scripts/loc_compare.py, scripts/latency_compare.py, COMPARISON.md, Dockerfile, docker-compose.yml, README, SECURITY, CONTRIBUTING, LEARNING, ADRs, .env.example, SUMMARY, scripts/check_dod.py, screenshots (text transcripts).
+Final reviewer pass (section 8 checklist), fix findings, rerun everything, history check, push.
 
 ## Blockers
+
+- Docker image builds cannot run in this sandbox (Docker Hub 429, proxy CA); verified in CI only.
 
 - (resolved 2026-11-10) GitHub repo did not exist and could not be created from the session; owner created it.

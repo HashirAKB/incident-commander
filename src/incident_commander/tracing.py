@@ -34,7 +34,7 @@ SECRET_PATTERNS = [
     re.compile(r"sk-ant-[A-Za-z0-9_\-]+"),
     re.compile(r"(?i)bearer\s+[A-Za-z0-9._\-]+"),
 ]
-SECRET_ENV_VARS = ("ANTHROPIC_API_KEY", "APPROVER_TOKEN", "LANGSMITH_API_KEY", "DATABASE_URL")
+SECRET_ENV_VARS = ("ANTHROPIC_API_KEY", "APPROVER_TOKEN", "LANGSMITH_API_KEY", "DATABASE_URL", "TELEMETRY_MCP_TOKEN")
 
 
 @dataclass(frozen=True)
@@ -152,3 +152,15 @@ def format_timeline(records: list[dict[str, Any]]) -> list[str]:
         indent = "  " if record["parent_id"] else ""
         lines.append(f"{offset_ms:9.1f}ms {duration_ms:8.1f}ms  {indent}{record['name']}  {' '.join(extras)}".rstrip())
     return lines
+
+
+def configure_langsmith() -> bool:
+    """LangSmith tracing is on if and only if LANGSMITH_API_KEY is set.
+
+    LangChain turns LangSmith on by itself when LANGSMITH_TRACING=true, so we set
+    that variable explicitly either way. When on, LangSmith receives prompts and
+    tool output; it is an opt-in for live debugging, off by default.
+    """
+    enabled = bool(os.environ.get("LANGSMITH_API_KEY"))
+    os.environ["LANGSMITH_TRACING"] = "true" if enabled else "false"
+    return enabled

@@ -1,0 +1,41 @@
+# Captured by scripts/capture_transcripts.py (mode=mock, telemetry stub). Real output, not edited.
+
+POST /runs -> 202 {'thread_id': '7822fd45-18ec-4ebd-aece-0d9a6632cded'}
+
+GET /runs/7822fd45-18ec-4ebd-aece-0d9a6632cded -> phase=paused diagnosis=connectivity
+{
+  "approval_id": "60dfe1fc-05d1-4ca9-a5e7-dfaa6a81633c",
+  "requested_at": "2026-11-11T03:39:13Z",
+  "expires_at": "2026-11-11T07:39:13Z",
+  "actions": [
+    {
+      "action_id": "A1",
+      "tool": "restart_device",
+      "args": {
+        "device_id": "D-33",
+        "reason": "Clear a stuck radio state (connectivity-loss runbook step 2)."
+      },
+      "rationale": "Clear a stuck radio state (connectivity-loss runbook step 2).",
+      "risk": "medium: about 2 minutes of downtime for one device",
+      "args_hash": "38473371c8cb1dd15aaa13863bdefd99fc502eb137d5439abc32bb4f3487c2e1"
+    },
+    {
+      "action_id": "A2",
+      "tool": "create_incident",
+      "args": {
+        "description": "Signal dropout on D-33.",
+        "device_id": "D-33",
+        "severity": "medium",
+        "title": "Signal loss on D-33"
+      },
+      "rationale": "Track the outage.",
+      "risk": "low: opens a ticket, no device impact",
+      "args_hash": "baebd26fd082608cde7222340db565d2b63cb8d9530abd53a2d8bc7cd5ed9d4c"
+    }
+  ]
+}
+
+POST /runs/7822fd45-18ec-4ebd-aece-0d9a6632cded/decisions with a stale approval_id -> 409 {'detail': 'stale or unknown approval_id: this run is waiting for a different approval'}
+POST /runs/7822fd45-18ec-4ebd-aece-0d9a6632cded/decisions without a token -> 401 {'detail': 'missing or wrong bearer token'}
+POST /runs/7822fd45-18ec-4ebd-aece-0d9a6632cded/decisions (approve both) -> 202 {'status': 'accepted'}
+GET /runs/7822fd45-18ec-4ebd-aece-0d9a6632cded -> stop_reason=completed executions=[{"action_id": "A1", "tool": "restart_device", "status": "executed"}, {"action_id": "A2", "tool": "create_incident", "status": "executed"}]
