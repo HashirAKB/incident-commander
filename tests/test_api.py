@@ -139,3 +139,12 @@ def test_api_refuses_to_bind_publicly_without_a_token() -> None:
         check_bind("0.0.0.0", None)
     check_bind("127.0.0.1", None)
     check_bind("0.0.0.0", "a-token")
+
+
+def test_limits_in_the_body_are_validated(client: TestClient) -> None:
+    for bad in ({"max_steps": -1}, {"max_steps": "many"}, {"max_cost_usd": True}, {"unknown": 1}, [1, 2]):
+        response = client.post("/runs", json={"alert": SIGNAL_ALERT, "limits": bad}, headers=AUTH)
+        assert response.status_code == 422, bad
+    ok = client.post("/runs", json={"alert": SIGNAL_ALERT, "limits": {"max_steps": 2}}, headers=AUTH)
+    assert ok.status_code == 202
+    assert wait_for_phase(client, ok.json()["thread_id"], "finished")["stop_reason"] == "step_limit"

@@ -124,3 +124,20 @@ def test_thread_ids_are_uuids() -> None:
     with pytest.raises(ValueError):
         config_for("../escape")
     assert config_for(str(uuid.UUID(int=1)))["configurable"]["thread_id"]
+
+
+async def test_a_new_run_cannot_reuse_an_existing_thread_id(settings: Settings) -> None:
+    async with open_runtime(settings, clock=fixed_clock) as rt:
+        status = await start_run(rt, alert("healthy_d02"), limits=BIG)
+        with pytest.raises(ValueError, match="already exists"):
+            await start_run(rt, alert("thermal_d17"), thread_id=status.thread_id)
+
+
+async def test_recorded_model_responses_drive_a_full_run(settings: Settings) -> None:
+    """tests/fixtures/model_recordings/rec-unknown-d11 overrides the fake's rules for triage and synthesis."""
+    async with open_runtime(settings, clock=fixed_clock) as rt:
+        status = await start_run(rt, alert("recorded_unknown_d11"), limits=BIG)
+    assert status.values["triage"]["severity"] == "low"
+    assert list(status.values["findings"]) == ["events", "metrics"]
+    assert status.values["diagnosis"]["summary"].startswith("Recorded response")
+    assert status.stop_reason == "no_action_needed"

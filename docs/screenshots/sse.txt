@@ -1,6 +1,6 @@
 # Captured by scripts/capture_transcripts.py (mode=mock, telemetry stub). Real output, not edited.
 
-GET /runs/7822fd45-18ec-4ebd-aece-0d9a6632cded/events
+GET /runs/b1cf71f7-8432-47d5-be31-324dd0ec1b46/events
 
 event: snapshot
 data: {"alert": {"alert_id": "alrt-signal-d33", "fired_at": "2026-03-01T00:00:00Z", "metric": "signal", "site": "plant-a", "summary": "D-33 signal below -100 dBm", "target": "D-33"}, "approval_request": {"actions": [{"action_id": "A1", "args": {"device_id": "D-33", "reason": "Clear a stuck radio sta ...
@@ -17,11 +17,11 @@ data: {"investigator": "events", "tool": "get_device_events", "type": "progress"
 event: progress
 data: {"investigator": "runbooks", "tool": "search_runbooks", "type": "progress"}
 
-event: progress
-data: {"investigator": "metrics", "tool": "detect_anomalies", "type": "progress"}
-
 event: node
 data: {"node": "investigate", "type": "node", "update": {"findings": {"events": {"blocked_tool_calls": [], "finding_id": "F-events", "investigator": "events", "summary": "event 2026-02-28T21:48:00Z maintenance: \"Antenna cable reseated by a technician.\"\nevent 2026-02-28T22:00:00Z link_lost: \"Radi ...
+
+event: progress
+data: {"investigator": "metrics", "tool": "detect_anomalies", "type": "progress"}
 
 event: node
 data: {"node": "investigate", "type": "node", "update": {"findings": {"runbooks": {"blocked_tool_calls": [], "finding_id": "F-runbooks", "investigator": "runbooks", "summary": "runbook match: Connectivity loss (weak signal) (runbook://connectivity-loss)\nrunbook match: Device restart procedure (runb ...

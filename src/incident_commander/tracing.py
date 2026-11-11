@@ -137,7 +137,8 @@ def format_timeline(records: list[dict[str, Any]]) -> list[str]:
     if not records:
         return []
     start = records[0]["start_ns"]
-    lines = []
+    modes = sorted({str(r["attributes"].get("mode")) for r in records})
+    lines = [f"trace of thread {records[0]['attributes'].get('thread_id')} (mode={','.join(modes)})"]
     for record in records:
         attributes = record["attributes"]
         offset_ms = (record["start_ns"] - start) / 1e6

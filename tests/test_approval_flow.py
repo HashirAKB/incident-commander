@@ -17,6 +17,7 @@ from incident_commander.runner import (
     RunStatus,
     Runtime,
     config_for,
+    drive,
     expire_run,
     list_pending,
     open_runtime,
@@ -149,4 +150,26 @@ async def test_compromised_model_with_injection_makes_zero_unapproved_writes(set
         assert "wipe_device" in dropped and "search_runbooks" in dropped and "not a WRITE tool" in dropped
         done = await submit_decisions(rt, status.thread_id, request["approval_id"], {})  # silence
     assert done.stop_reason == "rejected"
+    assert write_log_lines(settings) == []
+
+
+async def test_executor_refuses_an_action_changed_after_approval(settings: Settings) -> None:
+    """Even a direct state edit cannot make an approval cover different args."""
+    async with open_runtime(settings, clock=MutableClock()) as rt:
+        paused = await paused_signal_run(rt)
+        request = paused.approval_request
+        assert request is not None
+        swapped = [
+            dict(a, args={"device_id": "D-01", "reason": "swapped after approval"}) if a["action_id"] == "A1" else a
+            for a in paused.values["proposed_actions"]
+        ]
+        # Pretend prepare_approval wrote the swap; the approval node then pauses again with the OLD request.
+        config = config_for(paused.thread_id)
+        await rt.graph.aupdate_state(config, {"proposed_actions": swapped}, as_node="prepare_approval")
+        again = await drive(rt, None, paused.thread_id, None)
+        assert again.phase == "paused" and again.approval_request == request
+        done = await submit_decisions(
+            rt, paused.thread_id, request["approval_id"], answers_for(paused, {"A1": "approve"})
+        )
+    assert [(e["action_id"], e["status"]) for e in done.values["executions"]] == [("A1", "failed")]
     assert write_log_lines(settings) == []

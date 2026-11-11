@@ -23,7 +23,7 @@ the same contract, plus a new fleet-context MCP server.
 | M5 time travel and tracing | `tests/test_timetravel.py`, `tests/test_tracing.py` | locally and CI |
 | M6 API and approval page | `tests/test_api.py`, crash test c | locally and CI |
 | M7 evals | `python -m evals.run --mode mock` exits 0 with 0 unapproved writes for both systems; regeneration is byte-identical | locally and CI (determinism check) |
-| M8 comparison, packaging, docs | `scripts/loc_compare.py`, `scripts/latency_compare.py`, `scripts/check_dod.py`, `docker compose config` | locally; image builds in CI only |
+| M8 comparison, packaging, docs | `scripts/loc_compare.py`, `scripts/latency_compare.py`, `scripts/check_dod.py`, `docker compose config`, `docker build` of both images | scripts locally and in CI; image builds in CI only (green) |
 
 Not run: live evals and the live smoke test (no ANTHROPIC_API_KEY in the build environment; the smoke test
 skips itself), `docker build` and `docker compose up` locally (Docker Hub rate limit and the sandbox HTTPS
@@ -32,7 +32,8 @@ proxy); the approval page was exercised through its HTTP API in tests, not in a 
 ## Mocked vs real
 
 - Real: LangGraph runtime, checkpointers (SQLite and Postgres), MCP over stdio and streamable HTTP, the
-  telemetry-ops-copilot server at a pinned commit (contract and crash tests), FastAPI, SSE, OpenTelemetry
+  telemetry-ops-copilot server at a pinned commit (contract tests and one full approve-and-write run,
+  counted in its own SQLite tables), FastAPI, SSE, OpenTelemetry
   spans, SIGKILL crash recovery.
 - Mocked: the model (a deterministic rule-based fake in every committed number), device writes
   (simulated by the MCP servers), all fleet data (synthetic), prices in mock mode (fake, labeled).
@@ -43,7 +44,20 @@ proxy); the approval page was exercised through its HTTP API in tests, not in a 
 - At-least-once writes: one small window between the device write and the ledger insert.
 - One shared approver token; one API process per checkpointer.
 - Evals use the telemetry stub, not the real server.
-- Docker images are verified in CI only.
+- Docker images are built in CI only, and `docker compose up` has not been run end to end anywhere.
+
+## Reviewer pass findings (fixed)
+
+- The executor now refuses an approved action whose tool or args changed after the human saw it
+  (`tests/test_approval_flow.py::test_executor_refuses_an_action_changed_after_approval`).
+- A new run can no longer reuse an existing thread id (it would have merged into the old run's state).
+- Budget overrides in `POST /runs` are validated (positive numbers, known keys only).
+- Mock eval results differed between Python 3.12 and 3.13 (docstring dedent in 3.13 changed MCP tool
+  descriptions); descriptions are now normalized, results verified identical on both.
+- Added an end-to-end run against the real telemetry server and a recorded-response run.
+
+Git history: all project commits are authored and committed by the configured identity; the first commit
+(an empty README) was created by the repository owner on github.com and has GitHub as committer.
 
 ## Resume bullets (each backed by code and tests in this repo)
 

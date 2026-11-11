@@ -132,6 +132,21 @@ def load_alert(path: Path) -> Alert:
     return parse_alert(json.loads(path.read_text(encoding="utf-8")))
 
 
+def parse_limits(data: Any, settings: Settings) -> Limits:
+    """Budget overrides from an HTTP body: missing keys keep the defaults, values must be positive numbers."""
+    limits = default_limits(settings)
+    if data is None:
+        return limits
+    if not isinstance(data, dict) or set(data) - set(limits):
+        raise ValueError(f"limits must be an object with keys from {sorted(limits)}")
+    for key, value in data.items():
+        number_type = float if key == "max_cost_usd" else int
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+            raise ValueError(f"limits.{key} must be a positive number")
+        limits[key] = number_type(value)  # type: ignore[literal-required]
+    return limits
+
+
 def default_limits(settings: Settings) -> Limits:
     return {"max_steps": settings.max_steps, "max_tokens": settings.max_tokens, "max_cost_usd": settings.max_cost_usd}
 
@@ -231,6 +246,9 @@ async def start_run(
     on_event: EventSink | None = None,
 ) -> RunStatus:
     thread_id = validate_thread_id(thread_id or str(uuid.uuid4()))
+    if (await get_status(rt, thread_id)).phase != "not_found":
+        # A new input on an existing thread would merge into the old run's state.
+        raise ValueError(f"thread {thread_id} already exists; start a run with a new thread id")
     state = initial_state(alert, rt.settings, to_iso(rt.clock()), limits or default_limits(rt.settings))
     return await drive(rt, state, thread_id, on_event)
 

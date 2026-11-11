@@ -27,12 +27,26 @@ def make_executor(write_tools: dict[str, BaseTool], ledger: Ledger) -> StateConf
         with tracing.node_span("executor"):
             thread_id = str(config["configurable"]["thread_id"])
             decisions = state.get("decisions", {})
+            # What the human was shown: action id -> (tool, hash of the proposed args).
+            shown = {
+                a["action_id"]: (a["tool"], a["args_hash"])
+                for a in state.get("approval_request", {}).get("actions", [])
+            }
             executions: list[Execution] = []
             usage: Usage = EMPTY_USAGE
             for action in state.get("proposed_actions", []):
                 decision = decisions.get(action["action_id"])
                 if decision is None or decision["verdict"] not in ("approve", "edit") or decision["args"] is None:
                     continue  # no approval, no write
+                if shown.get(action["action_id"]) != (action["tool"], args_hash(action["tool"], action["args"])):
+                    # The proposal changed after the human saw it (e.g. a manual state edit):
+                    # the approval does not cover it.
+                    executions.append(
+                        _execution(
+                            action["action_id"], action["tool"], action["args"], "failed", "not the approved action"
+                        )
+                    )
+                    continue
                 try:
                     args = validate_write_args(action["tool"], decision["args"], write_schemas)
                 except InvalidAction as exc:

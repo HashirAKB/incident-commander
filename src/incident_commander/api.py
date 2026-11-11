@@ -33,7 +33,6 @@ from incident_commander import runner
 from incident_commander.approvals import DecisionRefused
 from incident_commander.config import Settings
 from incident_commander.paths import InvalidThreadId, validate_thread_id
-from incident_commander.state import Limits
 from incident_commander.timeutil import Clock, system_clock
 
 log = logging.getLogger("incident_commander.api")
@@ -105,8 +104,9 @@ class RunManager:
 
         self.tasks[thread_id] = asyncio.create_task(background())
 
-    def start(self, alert: dict[str, Any], limits: Limits | None) -> str:
+    def start(self, alert: dict[str, Any], limits_input: Any) -> str:
         parsed = runner.parse_alert(alert)
+        limits = runner.parse_limits(limits_input, self.rt.settings)
         thread_id = str(uuid.uuid4())
         self._launch(
             thread_id, lambda sink: runner.start_run(self.rt, parsed, thread_id=thread_id, limits=limits, on_event=sink)

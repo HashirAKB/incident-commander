@@ -15,15 +15,15 @@ Resume from this file alone: read "In progress" and "Next", then the milestone t
 | M6 API and approval page | done | 2026-11-10 20:43 UTC | 2026-11-10 20:49 UTC | tests/test_api.py |
 | M7 evals | done | 2026-11-10 20:50 UTC | 2026-11-10 20:57 UTC | python -m evals.run --mode mock |
 | M8 comparison, packaging, docs | done | 2026-11-10 20:57 UTC | 2026-11-11 03:45 UTC | scripts/check_dod.py |
-| Final reviewer pass | todo | | | all of the above |
+| Final reviewer pass | done | 2026-11-11 03:58 UTC | 2026-11-11 03:53 UTC | all of the above |
 
 ## In progress
 
-Final reviewer pass.
+Nothing: every Definition of Done item is met.
 
 ## Next
 
-Final reviewer pass (section 8 checklist), fix findings, rerun everything, history check, push.
+Optional follow-ups are listed in README "What I'd do next" (live evals first).
 
 ## Blockers
 

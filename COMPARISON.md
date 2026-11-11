@@ -16,18 +16,18 @@ responsibility, so each row compares code that does the same job.
 | component | hand-written loop (TS) | LangGraph (Python) |
 | --- | --- | --- |
 | Orchestration (loop or graph, state, routing, prompts) | 174 | 573 |
-| Human approval and write safety | 120 | 274 |
-| Persistence, resume, time travel | 104 | 344 |
+| Human approval and write safety | 120 | 285 |
+| Persistence, resume, time travel | 104 | 358 |
 | Budgets and pricing | 10 | 53 |
 | Model providers (live + mock) | 412 | 473 |
 | MCP client and tool registry | 89 | 119 |
 | HTTP API and live streaming | 169 | 214 |
-| Tracing | 144 | 110 |
-| CLI and config | 68 | 306 |
+| Tracing | 144 | 111 |
+| CLI and config | 68 | 310 |
 | Approval UI | 268 | 201 |
 | Evals | 251 | 403 |
-| **total (agent side)** | **1809** | **3070** |
-| MCP servers and data (not in total) | 614 | 433 |
+| **total (agent side)** | **1809** | **3100** |
+| MCP servers and data (not in total) | 614 | 432 |
 <!-- loc:end -->
 
 The LangGraph version is about 1.7x larger on the agent side. The framework did not shrink the code. It

@@ -31,7 +31,6 @@ VIBRATION_DRIFT = "D-08"  # vibration ramps up over the last 12 hours
 SIGNAL_DROPOUT = "D-33"  # signal collapses to about -110 dBm for the last 2 hours
 PAST_SPIKE = "D-42"  # 20-minute temperature spike two days ago
 LOW_BATTERY = ("D-05", "D-21", "D-46")  # battery ends below 15 %
-HEALTHY = "D-02"
 
 
 @dataclass(frozen=True)

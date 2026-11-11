@@ -91,7 +91,11 @@ def run(
                 status = await runner.get_status(rt, status.thread_id)
             return status
 
-    final = run_async(go)
+    try:
+        final = run_async(go)
+    except ValueError as exc:  # invalid alert file or a thread id that already exists
+        typer.echo(f"refused: {exc}", err=True)
+        raise typer.Exit(2) from exc
     if follow:
         _print_status(final)
 

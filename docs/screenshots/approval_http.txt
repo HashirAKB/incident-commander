@@ -1,12 +1,12 @@
 # Captured by scripts/capture_transcripts.py (mode=mock, telemetry stub). Real output, not edited.
 
-POST /runs -> 202 {'thread_id': '7822fd45-18ec-4ebd-aece-0d9a6632cded'}
+POST /runs -> 202 {'thread_id': 'b1cf71f7-8432-47d5-be31-324dd0ec1b46'}
 
-GET /runs/7822fd45-18ec-4ebd-aece-0d9a6632cded -> phase=paused diagnosis=connectivity
+GET /runs/b1cf71f7-8432-47d5-be31-324dd0ec1b46 -> phase=paused diagnosis=connectivity
 {
-  "approval_id": "60dfe1fc-05d1-4ca9-a5e7-dfaa6a81633c",
-  "requested_at": "2026-11-11T03:39:13Z",
-  "expires_at": "2026-11-11T07:39:13Z",
+  "approval_id": "df594164-cc68-4ced-920d-7b1261d0d052",
+  "requested_at": "2026-11-11T03:53:15Z",
+  "expires_at": "2026-11-11T07:53:15Z",
   "actions": [
     {
       "action_id": "A1",
@@ -35,7 +35,7 @@ GET /runs/7822fd45-18ec-4ebd-aece-0d9a6632cded -> phase=paused diagnosis=connect
   ]
 }
 
-POST /runs/7822fd45-18ec-4ebd-aece-0d9a6632cded/decisions with a stale approval_id -> 409 {'detail': 'stale or unknown approval_id: this run is waiting for a different approval'}
-POST /runs/7822fd45-18ec-4ebd-aece-0d9a6632cded/decisions without a token -> 401 {'detail': 'missing or wrong bearer token'}
-POST /runs/7822fd45-18ec-4ebd-aece-0d9a6632cded/decisions (approve both) -> 202 {'status': 'accepted'}
-GET /runs/7822fd45-18ec-4ebd-aece-0d9a6632cded -> stop_reason=completed executions=[{"action_id": "A1", "tool": "restart_device", "status": "executed"}, {"action_id": "A2", "tool": "create_incident", "status": "executed"}]
+POST /runs/b1cf71f7-8432-47d5-be31-324dd0ec1b46/decisions with a stale approval_id -> 409 {'detail': 'stale or unknown approval_id: this run is waiting for a different approval'}
+POST /runs/b1cf71f7-8432-47d5-be31-324dd0ec1b46/decisions without a token -> 401 {'detail': 'missing or wrong bearer token'}
+POST /runs/b1cf71f7-8432-47d5-be31-324dd0ec1b46/decisions (approve both) -> 202 {'status': 'accepted'}
+GET /runs/b1cf71f7-8432-47d5-be31-324dd0ec1b46 -> stop_reason=completed executions=[{"action_id": "A1", "tool": "restart_device", "status": "executed"}, {"action_id": "A2", "tool": "create_incident", "status": "executed"}]
