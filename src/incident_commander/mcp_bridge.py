@@ -8,6 +8,7 @@ the Node server.
 
 from __future__ import annotations
 
+import inspect
 import json
 import shutil
 import sys
@@ -85,6 +86,11 @@ async def open_toolbox(settings: Settings) -> AsyncIterator[Toolbox]:
         for server_name in ("telemetry", "fleet-context"):
             session = await stack.enter_async_context(client.session(server_name))
             tools += await load_mcp_tools(session, server_name=server_name)
+        for tool in tools:
+            # Python 3.13 strips docstring indentation at compile time and 3.12 does not, so
+            # FastMCP descriptions (taken from docstrings) differ by version. Normalizing keeps
+            # prompts, token counts and the committed eval results identical everywhere.
+            tool.description = inspect.cleandoc(tool.description)
         yield split_tools(tools)
 
 

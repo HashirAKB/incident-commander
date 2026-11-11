@@ -20,13 +20,13 @@ responsibility, so each row compares code that does the same job.
 | Persistence, resume, time travel | 104 | 344 |
 | Budgets and pricing | 10 | 53 |
 | Model providers (live + mock) | 412 | 473 |
-| MCP client and tool registry | 89 | 116 |
+| MCP client and tool registry | 89 | 119 |
 | HTTP API and live streaming | 169 | 214 |
 | Tracing | 144 | 110 |
 | CLI and config | 68 | 306 |
 | Approval UI | 268 | 201 |
 | Evals | 251 | 403 |
-| **total (agent side)** | **1809** | **3067** |
+| **total (agent side)** | **1809** | **3070** |
 | MCP servers and data (not in total) | 614 | 433 |
 <!-- loc:end -->
 

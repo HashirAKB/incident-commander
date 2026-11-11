@@ -19,5 +19,6 @@ agent appears only in `evals/baseline.py`, as the comparison.
 
 - Each stage gets only the tools it needs; write tools can be held by one node (ADR 0002).
 - More code than the prebuilt agent (see COMPARISON.md), but every decision has a named function and a test.
-- The eval shows the cost of the alternative: the baseline re-sends its whole history every turn
-  (662,995 vs 236,437 mock tokens over the 39 cases) and lets the model hold write tools.
+- The eval shows the cost of the alternative: the baseline re-sends its whole history every turn (about
+  2.8x the graph's mock tokens over the 39 cases, see evals/results/mock.md) and lets the model hold
+  write tools.

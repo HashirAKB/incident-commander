@@ -136,8 +136,8 @@ server's own write log.
 | executed_writes | 18 | 30 |
 | unapproved_writes | 0 | 0 |
 | steps | 579 | 617 |
-| tokens | 236437 | 662995 |
-| cost_usd (mode=mock) | 0.311621 | 0.696127 |
+| tokens | 236392 | 662667 |
+| cost_usd (mode=mock) | 0.311576 | 0.695799 |
 | stop_reasons | completed=14, expired=10, no_action_needed=10, rejected=5 | completed=14, expired=10, no_action_needed=10, rejected=5 |
 <!-- eval:end -->
 

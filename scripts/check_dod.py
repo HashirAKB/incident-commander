@@ -1,6 +1,7 @@
 """Check the Definition of Done items that a script can check.
 
-    python -m scripts.check_dod
+    python -m scripts.check_dod                 # check
+    python -m scripts.check_dod --sync-readme   # first copy the mock eval table into README.md
 
 - every required file exists
 - no em dash character in README.md or SUMMARY.md
@@ -75,7 +76,17 @@ def problems() -> list[str]:
     return found
 
 
+def sync_readme() -> None:
+    """Copy the aggregate table from evals/results/mock.md into the README markers."""
+    path = ROOT / "README.md"
+    text = path.read_text()
+    start, end = text.index("<!-- eval:start -->\n"), text.index("\n<!-- eval:end -->")
+    path.write_text(text[: start + len("<!-- eval:start -->\n")] + mock_eval_table() + text[end:])
+
+
 def main() -> int:
+    if "--sync-readme" in sys.argv:
+        sync_readme()
     found = problems()
     for problem in found:
         print(f"FAIL: {problem}")
